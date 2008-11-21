@@ -1,3 +1,5 @@
+;; Very simple object system which focuses on runtime speed.
+
 
 ;; Initializes the global define-class macro-expension-time
 ;; environnment. This macro must be called
@@ -296,12 +298,16 @@
       (else (raise unknown-meth-error))))))
 
 (define-macro (setup-generic-functions!)
+  (define all-generic-functions (map cdr (table->list meth-table)))
+
   `(begin
+     ;; Setup the tables and meta-functions that will search for the
+     ;; appropriate generic function instance. The search should be in
+     ;; about O(1) since its just a lookup into a pre-calculated table.
      ,@(map
         (lambda (gen-fun)
           (let ((name (generic-function-name gen-fun))
-                (args (generic-function-args gen-fun))
-                (instances (generic-function-instances gen-fun)))
+                (args (generic-function-args gen-fun)))
            `(begin
               (define ,(gen-method-table-name name) (make-table test: equal?))
               (define (,name ,@args)
@@ -316,8 +322,26 @@
                               ""
                               (lambda ()
                                 (pretty-print `(,,name ,@types)))))))))))))
-        (map cdr (table->list meth-table)))
+        all-generic-functions)
+     
+     ;; Insert the declared generic functions into their respective tables
+     (begin
+       ,@(map (lambda (gen-fun)
+                (let ((name (generic-function-name gen-fun))
+                      (instances (generic-function-instances gen-fun)))
+                  `(begin
+                     ,@(map (lambda (method)
+                              `(table-set! ,(gen-method-table-name name)
+                                           ',(method-types method)
+                                           ,(method-body method)))
+                            instances))))
+              all-generic-functions))
+
+     ;; Insert the most specific generic function instance for all
+     ;; possible of valid type combinations for the arguments. (not
+     ;; efficient, but made at compile time).
      (polymorphize-methods!)))
+
 
 
 (define-macro (polymorphize-methods!)
@@ -367,12 +391,6 @@
   
   (load "scm-lib.scm")
 
-;;   (pp `((is-subclass? ,test1 ,test2) => ,(is-subclass? test1 test2)))
-;;   (pp `((find-super-classes ,test1) => ,(find-super-classes test1)))
-;;   (pp `((find-super-classes ,test2) => ,(find-super-classes test2)))
-;;   (pp `((sort-class-specific-order (map car (table->list class-table))) =>
-;;         ,(sort-class-specific-order (map car (table->list class-table)))))
-
   ;; runtime generated code that will insert the most specific method
   ;; instance for subclasses without generic method instances.
   `(begin
@@ -382,9 +400,6 @@
          (lambda (gen-method)
            (let ((gen-meth-name (generic-function-name gen-method))
                  (gen-meth-instances (generic-function-instances gen-method)))
-;;              (pp `(test-meth-name: ,gen-meth-name))
-;;              (pp `(instances: ,gen-meth-instances))
-;;              (pp `(sorted instances: ,(sort-methods gen-meth-instances)))
              (apply
               reverse-append
               (map
@@ -400,18 +415,17 @@
                         ''nothing-to-add))
                   (apply cartesian-product
                          (map find-sub-classes (method-types method)))))
-               (sort-methods gen-meth-instances)))))
+               ;; Must reverse the list because of the reverse-append
+               ;; calls! The order of the table-set! are important as
+               ;; the one with the most specific instance should
+               ;; appear last!
+               (reverse (sort-methods gen-meth-instances))))))
          (map cdr (table->list meth-table))))))
 
 
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(include "scm-lib-macro.scm")
-(include "test-macro.scm")
-(load "scm-lib.scm")
-(load "test.scm")
 
 (init)
 
