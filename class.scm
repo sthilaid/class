@@ -160,6 +160,11 @@
                     (table-ref ,(rt-class-table-name) class-id)))
            (eq? super-id 'any-type)))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; define-class
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
   
@@ -269,10 +274,19 @@
       (filter (lambda (field-index)
                 (is-instance-slot? (cdr field-index)))
               field-indices))
+    ;; Transforms a macro time vector to a vector runtime declaration
+    (define (vector->vector v)
+      (let ((code '())
+            (len  (vector-length v)))
+       (let loop ((i (- (vector-length v) 1))
+                  (code '()))
+         (if (>= i 0)
+             (loop (- i 1) (cons `(quote ,(vector-ref v i)) code))
+             (cons 'vector code)))))
     `(begin
        ;; Class descriptor is put in a global var
        (define ,(class-desc-name name)
-         ',(class-info-desc (table-ref class-table name)))
+         ,(vector->vector (class-info-desc (table-ref class-table name))))
        (define (,(symbol-append 'make- name) ,@(map car instance-field-indices))
          (vector ,(class-desc-name name)
                  ,@(map car instance-field-indices)))))
