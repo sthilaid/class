@@ -4,6 +4,7 @@
 ;; Initializes the global define-class macro-expension-time
 ;; environnment. This macro must be called
 (define-macro (init)
+  ;; macro exp time librairy
   (eval
    '(begin
       ;; starts to 2 because 0/1 are reserved for the class id and supers
@@ -13,10 +14,7 @@
       (define (next-desc-index)
         (set! desc-index (+ desc-index 1))
         desc-index)
-      (define (make-class-info field-indices descriptor)
-        (vector field-indices descriptor))
-      (define (class-info-fi info) (vector-ref info 0))
-      (define (class-info-desc info) (vector-ref info 1))
+      
       (define (meth-name sign) (if (not (list? sign))
                                    (error 'bad-signature-syntax)
                                    (car sign)))
@@ -26,12 +24,44 @@
           (string->symbol (apply string-append
                                  (symbol->string s1)
                                  (map symbol->string ss))))
+
+      (define (is-subclass? class-id super-id)
+        ;; Warning: This might return true even if its not a subclass if
+        ;; an old superclass as been redefined...
+        (or (eq? class-id super-id)
+            (exists (lambda (class-super) (is-subclass? class-super super-id))
+                    (class-desc-supers (class-info-desc
+                                        (table-ref class-table class-id))))))
+
+
+      ;;;;;;;;;;;;;;; Naming convention abstractions ;;;;;;;;;;;;;;;
+      (define (gen-accessor-name class-name var)
+        (symbol-append class-name '- var))
+      (define (gen-setter-name class-name var)
+        (symbol-append class-name '- var '-set!))
+      (define (gen-predicate-name class-name)
+        (symbol-append class-name '?))
+      (define (class-desc-name  class-name)
+        (symbol-append class-name '-class-descriptor))
+
+
       (define (gen-method-desc-name sign)
         (symbol-append (meth-name sign) '-meth-desc))
 
       (define (gen-method-table-name name)
         (symbol-append name '-meth-table))
 
+      (define (rt-class-table-name) 'rt-class-table)
+      
+
+
+      ;;;;;;;;;;;;;;; Data structure used ;;;;;;;;;;;;;;;
+
+      (define (make-class-info field-indices descriptor)
+        (vector field-indices descriptor))
+      (define (class-info-fi info) (vector-ref info 0))
+      (define (class-info-desc info) (vector-ref info 1))
+      
       (define (make-class-desc id supers num-fields)
         (let ((desc (make-vector (+ num-fields 2) 'unknown-slot)))
           (vector-set! desc 0 id)
@@ -41,6 +71,18 @@
       (define (class-desc-supers desc) (vector-ref desc 1))
       (define (class-desc-indices-vect desc) (vector-ref desc 2))
 
+
+      (define (make-slot type index) (cons type index))
+      (define (is-class-slot? slot-info)
+        (and (pair? slot-info)
+             (eq? (car slot-info) class:)))
+      (define (is-instance-slot? slot-info)
+        (and (pair? slot-info)
+             (eq? (car slot-info) instance:)))
+      (define (slot-index slot-info)
+        (cdr slot-info))
+
+        
       (define (make-generic-function name args)
         (vector name args '()))
       (define (generic-function-name gf) (vector-ref gf 0))
@@ -52,29 +94,70 @@
       (define make-method vector) ; (make-method id types body)
       (define (method-id meth) (vector-ref meth 0))
       (define (method-types meth) (vector-ref meth 1))
-      (define (method-body meth) (vector-ref meth 2)))))
+      (define (method-body meth) (vector-ref meth 2))
+
+      
+
+
+      )
+
+   ;; Runtime librairy. Most functions are not hygienic.
+   #;
+   `(begin
+      (define (class-desc-id desc) (vector-ref desc 0))
+      (define (class-desc-supers desc) (vector-ref desc 1))
+      (define (class-desc-indices-vect desc) (vector-ref desc 2))
+
+      ;; Runtime class table
+      (define ,(rt-class-table-name) (make-table test: eq?))
+
+      ;; FIXME: VERY BAD object verification..
+      (define (get-class-id obj)
+        (if (and (vector? obj)
+                 (vector? (vector-ref obj 0))
+                 (symbol? (class-desc-id (vector-ref obj 0))))
+            (class-desc-id (vector-ref obj 0))
+            'any-type))
+
+      (define (is-subclass? class-id super-id)
+        ;; Warning: This might return true even if its not a subclass if
+        ;; an old superclass as been redefined...
+        (or (eq? class-id super-id)
+            (exists (lambda (class-super) (is-subclass? class-super super-id))
+                    (class-desc-supers
+                     (table-ref ,(rt-class-table-name) class-id))))))
+   ))
+
+(define-macro (init-rt)
+   `(begin
+      (define (class-desc-id desc) (vector-ref desc 0))
+      (define (class-desc-supers desc) (vector-ref desc 1))
+      (define (class-desc-indices-vect desc) (vector-ref desc 2))
+
+      ;; Runtime class table
+      (define ,(rt-class-table-name) (make-table test: eq?))
+
+      ;; FIXME: VERY BAD object verification..
+      (define (get-class-id obj)
+        (if (and (vector? obj)
+                 (vector? (vector-ref obj 0))
+                 (symbol? (class-desc-id (vector-ref obj 0))))
+            (class-desc-id (vector-ref obj 0))
+            'any-type))
+
+      (define (is-subclass? class-id super-id)
+        ;; Warning: This might return true even if its not a subclass if
+        ;; an old superclass as been redefined...
+        (or (eq? class-id super-id)
+            (exists (lambda (class-super) (is-subclass? class-super super-id))
+                    (class-desc-supers
+                     (table-ref ,(rt-class-table-name) class-id)))))))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
   
   (define obj (gensym 'obj))
   (define val (gensym 'val))
-  (define (gen-accessor-name class-name var)
-    (symbol-append class-name '- var))
-  (define (gen-setter-name class-name var)
-    (symbol-append class-name '- var '-set!))
-  (define (class-desc-name)
-    (symbol-append name '-class-descriptor))
-
-  (define (make-slot type index) (cons type index))
-  (define (is-class-slot? slot-info)
-    (and (pair? slot-info)
-         (eq? (car slot-info) class:)))
-  (define (is-instance-slot? slot-info)
-    (and (pair? slot-info)
-         (eq? (car slot-info) instance:)))
-  (define (slot-index slot-info)
-    (cdr slot-info))
 
   ;; todo
   ;; puts the fields into the temp table. The class fields MUST be
@@ -106,7 +189,7 @@
        ((is-class-slot? slot-info)
         (let ((index (slot-index slot-info)))
           `(define (,(gen-accessor-name name field))
-             (vector-ref ,(class-desc-name) ,index))))
+             (vector-ref ,(class-desc-name name) ,index))))
 
        ((is-instance-slot? slot-info)
         (let ((index (slot-index slot-info)))
@@ -127,7 +210,7 @@
        ((is-class-slot? slot-info)
         (let ((index (slot-index slot-info)))
           `(define (,(gen-setter-name name field) ,val)
-             (vector-set! ,(class-desc-name) ,index ,val))))
+             (vector-set! ,(class-desc-name name) ,index ,val))))
        
        ((is-instance-slot? slot-info)
         (let ((index (slot-index slot-info)))
@@ -181,11 +264,20 @@
               field-indices))
     `(begin
        ;; Class descriptor is put in a global var
-       (define ,(class-desc-name)
+       (define ,(class-desc-name name)
          ',(class-info-desc (table-ref class-table name)))
        (define (,(symbol-append 'make- name) ,@(map car instance-field-indices))
-         (vector ,(class-desc-name)
+         (vector ,(class-desc-name name)
                  ,@(map car instance-field-indices)))))
+
+  (define (gen-predicate)
+    (define obj (gensym 'obj))
+    `(begin
+       ;; Class descriptor is put in a global var
+       (define (,(gen-predicate-name name) ,obj)
+         (is-subclass? (class-desc-id (vector-ref ,obj 0))
+                       ',name))))
+  
 
   (define (sort-field-indices field-indices)
     (define-macro (indice-comp op)
@@ -231,7 +323,13 @@
     (table-set! class-table name (make-class-info field-indices class-desc))
     `(begin ,@(gen-accessors field-indices)
             ,@(gen-setters field-indices)
-            ,(gen-instantiator field-indices))))
+            ,(gen-predicate)
+            ,(gen-instantiator field-indices)
+            ;; here the class descriptor is put in a global table
+            ;; but it is also available via its variable ,(class-desc-name name)
+            (table-set! ,(rt-class-table-name)
+                        ',name
+                        ,(class-desc-name name)))))
 
 (define-macro (define-generic signature)
   (define name (meth-name signature))
@@ -345,13 +443,6 @@
 
 
 (define-macro (polymorphize-methods!)
-  (define (is-subclass? class-id super-id)
-    ;; Warning: This might return true even if its not a subclass if
-    ;; an old superclass as been redefined...
-    (or (eq? class-id super-id)
-        (exists (lambda (class-super) (is-subclass? class-super super-id))
-                (class-desc-supers (class-info-desc
-                                    (table-ref class-table class-id))))))
   (define (find-sub-classes class-id)
     (filter (lambda (current-class) (is-subclass? current-class class-id))
             (map car (table->list class-table) )))
@@ -428,17 +519,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (init)
-
-;; FIXME: VERY BAD object verification..
-(define (get-class-id obj)
-  (define (class-desc-id desc) (vector-ref desc 0)) ;redefined at runtime...
-  (if (and (vector? obj)
-           (vector? (vector-ref obj 0))
-           (symbol? (class-desc-id (vector-ref obj 0))))
-      (class-desc-id (vector-ref obj 0))
-      'any-type))
-
-
+(init-rt)
 
 (define-test simple-instance-slots "aaabbccdde" 'ok
   (define-class A ()      (slot: a))
