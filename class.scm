@@ -298,7 +298,6 @@
         (exists (lambda (class-super) (is-subclass? class-super super-id))
                 (class-desc-supers (class-info-desc
                                     (table-ref class-table class-id))))))
-  #;
   (define (find-sub-classes class-id)
     (filter (lambda (current-class) (is-subclass? current-class class-id))
             (map car (table->list class-table) )))
@@ -306,27 +305,73 @@
   (define (find-super-classes class-id)
     (filter (lambda (current-class) (is-subclass? class-id current-class))
             (map car (table->list class-table))))
-  
-  (define (sort-class-specific-order class-lst)
-    (define (get-super-numbers class-id)
+
+  (define (get-super-numbers class-id)
       (length
        (apply generic-multi-union
               eq?
               (map find-super-classes
                    (class-desc-supers (class-info-desc
                                        (table-ref class-table class-id)))))))
-    (define (class-comparator fun)
-      (lambda (c1 c2)
-        (fun (get-super-numbers c1) (get-super-numbers c2))))
+  
+  (define (class-comparator fun)
+    (lambda (c1 c2)
+      (fun (get-super-numbers c1) (get-super-numbers c2))))
+
+  (define (sort-class-specific-order class-lst)
     (quick-sort (class-comparator <) (class-comparator =) (class-comparator >)
                 class-lst))
+
+  ;; FIXME: This comparator will certainly lead to strange ordering
+  ;; with complicated hierarchy. This is just a temporary fix...
+  (define (method-comparator fun)
+    (lambda (m1 m2)
+      (fun (apply + (map get-super-numbers (method-types m1)))
+           (apply + (map get-super-numbers (method-types m2))))))
+  
+  (define (sort-methods method-lst)
+    (quick-sort (method-comparator <)
+                (method-comparator =)
+                (method-comparator >)
+                method-lst))
+  
   (load "scm-lib.scm")
 
   (pp `((is-subclass? ,test1 ,test2) => ,(is-subclass? test1 test2)))
-  (pp `((find-sub-classes ,test1) => ,(find-sub-classes test1)))
-  (pp `((find-sub-classes ,test2) => ,(find-sub-classes test2)))
+  (pp `((find-super-classes ,test1) => ,(find-super-classes test1)))
+  (pp `((find-super-classes ,test2) => ,(find-super-classes test2)))
   (pp `((sort-class-specific-order (map car (table->list class-table))) =>
-        ,(sort-class-specific-order (map car (table->list class-table))))))
+        ,(sort-class-specific-order (map car (table->list class-table)))))
+
+  ;; runtime generated code that will insert the most specific method
+  ;; instance for subclasses without generic method instances.
+  `(begin
+     ,@(map
+        (lambda (gen-method)
+          (let ((gen-meth-name (car gen-method))
+                (gen-meth-instances (cdr gen-method)))
+            (pp `(test-meth-name: ,gen-meth-name))
+            (pp `(instances: ,gen-meth-instances))
+            (pp `(sorted instances: ,(sort-methods gen-meth-instances)))
+            (map
+             (lambda (method)
+               (pp `(test ,(apply cartesian-product
+                                  (map find-sub-classes
+                                       (method-types method)))))
+               (map
+                (lambda (possible-types)
+                  (if (not (exists (lambda (m) (equal? possible-types
+                                                       (method-types m)))
+                                   gen-meth-instances))
+                      `(table-set! ,(gen-method-table-name gen-meth-name)
+                                   ,possible-types
+                                   ,(method-body method))
+                      'nothing-to-add))
+                (apply cartesian-product
+                       (map find-sub-classes (method-types method)))))
+             (sort-methods gen-meth-instances))))
+        (table->list meth-table))))
+
 
 
 
