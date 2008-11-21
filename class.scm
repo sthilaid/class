@@ -151,16 +151,14 @@
        (eq? (vector-ref obj 0)
             (table-ref ,(rt-class-table-name) class-id (gensym))))
 
-     ;; Returns the super-class id, if found.
      (define (is-subclass? class-id super-id)
        ;; Warning: This might return true even if its not a subclass if
        ;; an old superclass as been redefined...
        (or (and (eq? class-id super-id) class-id)
            (exists (lambda (class-super) (is-subclass? class-super super-id))
-                   (class-desc-supers (class-info-desc
-                                       (table-ref class-table class-id))))
-           (eq? super-id any-type)))
-     ))
+                   (class-desc-supers
+                    (table-ref ,(rt-class-table-name) class-id)))
+           (eq? super-id 'any-type)))))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
