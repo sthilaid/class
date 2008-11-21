@@ -146,9 +146,20 @@
                                   (+ (slot-index
                                       (cdar (take-right field-indices 1)))
                                      1))))
-      (for-each (lambda (i) (vector-set! desc i (instance-index++)))
-                (map (lambda (field-index) (slot-index (cdr field-index)))
-                     field-indices))
+      ;; For each field, insert the instance index if it is an
+      ;; instance slot or, simply add an unbound notice for a class
+      ;; slot into the descriptor
+      (for-each
+       (lambda (fi)
+         (let ((index (slot-index fi)))
+           (cond ((is-instance-slot? fi)
+                  (vector-set! desc index (instance-index++)))
+                 ((is-class-slot? fi)
+                  (vector-set! desc index 'unbound-class-slot))
+                 (else
+                  (pp fi)
+                  (error "Unknown slot type")))))
+       (map cdr field-indices))
       desc))
 
   ;; field-indices are expected to be sorted from lower index to
@@ -207,6 +218,7 @@
             fields)
   (let* ((field-indices (sort-field-indices (table->list temp-field-table)))
          (class-desc (gen-descriptor field-indices)))
+    (pp field-indices)
 
     (table-set! class-table name (make-class-info field-indices class-desc))
     `(begin ,@(gen-accessors field-indices)
@@ -226,7 +238,7 @@
      (define (,name ,@(args))
        (define (get-types arg)
          (class-desc-id (vector-ref arg 0)))
-       (let ((types (map get-types (list ,@(args)))))
+       (let ((types (map get-class-id (list ,@(args)))))
          (cond
           ((table-ref ,(gen-method-table-name name) types #f)
            => (lambda (method) (method ,@(args))))
@@ -237,11 +249,9 @@
                                    (lambda ()
                                      (pretty-print `(,,name ,@types))))))))))))
 
-;; FIXME: VERY BAD object verification..
-;; (define-macro (get-class obj)
-;;   `(if (and (vector? obj) (vector? (vector-ref obj 0)))
-;;        (vector-ref obj 0)
-;;        any-type))
+
+
+
 
 (define-macro (define-method signature bod . bods)
   (define (name) (meth-name signature))
@@ -280,6 +290,16 @@
                        ',types
                        (lambda ,args ,bod ,@bods)))))
       (else (raise unknown-meth-error))))))
+
+
+;; FIXME: VERY BAD object verification..
+(define (get-class-id obj)
+  (if (and (vector? obj)
+           (vector? (vector-ref obj 0))
+           (symbol? (class-desc-id (vector-ref obj 0))))
+      (class-desc-id (vector-ref obj 0))
+      any-type))
+
 
 #;
 (define-macro (polymorphize-methods!)
