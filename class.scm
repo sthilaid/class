@@ -31,7 +31,8 @@
         (or (eq? class-id super-id)
             (exists (lambda (class-super) (is-subclass? class-super super-id))
                     (class-desc-supers (class-info-desc
-                                        (table-ref class-table class-id))))))
+                                        (table-ref class-table class-id))))
+            (eq? super-id any-type)))
 
 
       ;;;;;;;;;;;;;;; Naming convention abstractions ;;;;;;;;;;;;;;;
@@ -452,12 +453,14 @@
             (map car (table->list class-table))))
 
   (define (get-super-numbers class-id)
-      (length
-       (apply generic-multi-union
-              eq?
-              (map find-super-classes
-                   (class-desc-supers (class-info-desc
-                                       (table-ref class-table class-id)))))))
+    (if (eq? class-id any-type)
+        0
+        (length
+         (apply generic-multi-union
+                eq?
+                (map find-super-classes
+                     (class-desc-supers (class-info-desc
+                                         (table-ref class-table class-id))))))))
   
   (define (class-comparator fun)
     (lambda (c1 c2)
