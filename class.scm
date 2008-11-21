@@ -431,6 +431,7 @@
 
 ;; FIXME: VERY BAD object verification..
 (define (get-class-id obj)
+  (define (class-desc-id desc) (vector-ref desc 0)) ;redefined at runtime...
   (if (and (vector? obj)
            (vector? (vector-ref obj 0))
            (symbol? (class-desc-id (vector-ref obj 0))))
