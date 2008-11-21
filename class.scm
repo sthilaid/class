@@ -1,3 +1,5 @@
+;; Very simple object system which focuses on runtime speed.
+
 
 ;; Initializes the global define-class macro-expension-time
 ;; environnment. This macro must be called
@@ -71,6 +73,14 @@
       (define (class-desc-supers desc) (vector-ref desc 1))
       (define (class-desc-indices-vect desc) (vector-ref desc 2))
 
+      (define (make-generic-function name args)
+        (vector name args '()))
+      (define (generic-function-name gf) (vector-ref gf 0))
+      (define (generic-function-args gf) (vector-ref gf 1))
+      (define (generic-function-instances gf) (vector-ref gf 2))
+      (define (generic-function-instances-add! gf instance)
+        (vector-set! gf 2 (cons instance (generic-function-instances gf))))
+      
       (define make-method vector) ; (make-method id types body)
       (define (method-id meth) (vector-ref meth 0))
       (define (method-types meth) (vector-ref meth 1))
@@ -225,7 +235,7 @@
          (set! instance-index (+ instance-index 1))
          ,i))
     (let* ((instance-index 1)
-           (desc (make-class-desc (gensym name) supers
+           (desc (make-class-desc name supers
                                   (+ (slot-index
                                       (cdar (take-right field-indices 1)))
                                      1))))
@@ -357,9 +367,7 @@
   (define (parse-arg arg)
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
            (let ((var (car arg))
-                 (type (class-desc-id
-                        (class-info-desc
-                         (table-ref class-table (cadr arg))))))
+                 (type (cadr arg)))
              (values var type)))
           (else (values arg any-type))))
   ;; Returns 2 values: the ordrered list of arguments and the ordered
@@ -409,49 +417,3 @@
 (load "test.scm")
 
 
-
-(define-test simple-instance-slots "aaabbccdde" 'ok
-  (define-class A ()      (slot: a))
-  (define-class B (A)     (slot: b))
-  (define-class C ()      (slot: c))
-  (define-class D ()      (slot: d))
-  (define-class E (B C D) (slot: e))
-  (let ((obj (make-E 'a 'b 'c 'd 'e)))
-    (display (A-a obj))
-    (display (B-a obj))
-    (display (E-a obj))
-    (display (B-b obj))
-    (display (E-b obj))
-    (display (C-c obj))
-    (display (E-c obj))
-    (display (D-d obj))
-    (display (E-d obj))
-    (display (E-e obj)))
-  'ok)
-
-(define-test simple-class-slots "123344" 'ok
-  (define-class A () (slot: a) (class-slot: b))
-  (let ((obj1 (make-A 1))
-        (obj2 (make-A 2)))
-    (A-b-set! 3)
-    (display (A-a obj1))
-    (display (A-a obj2))
-    (display (A-b))
-    (display (A-b))
-    (A-b-set! 4)
-    (display (A-b))
-    (display (A-b)))
-  'ok)
-
-(define-test test-generic-simple "10dix" 'ok
-  (define-class A () (slot: a))
-  (define-class B () (slot: b))
-  (define-generic (test obj))
-  (define-method (test (a A)) (number->string (A-a a)))
-  (define-method (test (b B)) (symbol->string (B-b b)))
-
-  (display (test (make-A 10)))
-  (display (test (make-B 'dix)))
-  'ok)
-
-;; (pp (lambda () (define-class A () (slot: a) (class-slot: b)) 'blu))
