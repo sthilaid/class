@@ -25,10 +25,11 @@
                                  (symbol->string s1)
                                  (map symbol->string ss))))
 
+      ;; Returns the super-class id, if found.
       (define (is-subclass? class-id super-id)
         ;; Warning: This might return true even if its not a subclass if
         ;; an old superclass as been redefined...
-        (or (eq? class-id super-id)
+        (or (and (eq? class-id super-id) class-id)
             (exists (lambda (class-super) (is-subclass? class-super super-id))
                     (class-desc-supers (class-info-desc
                                         (table-ref class-table class-id))))
@@ -130,29 +131,36 @@
    ))
 
 (define-macro (init-rt)
-   `(begin
-      (define (class-desc-id desc) (vector-ref desc 0))
-      (define (class-desc-supers desc) (vector-ref desc 1))
-      (define (class-desc-indices-vect desc) (vector-ref desc 2))
+  `(begin
+     (define (class-desc-id desc) (vector-ref desc 0))
+     (define (class-desc-supers desc) (vector-ref desc 1))
+     (define (class-desc-indices-vect desc) (vector-ref desc 2))
 
-      ;; Runtime class table
-      (define ,(rt-class-table-name) (make-table test: eq?))
+     ;; Runtime class table
+     (define ,(rt-class-table-name) (make-table test: eq?))
 
-      ;; FIXME: VERY BAD object verification..
-      (define (get-class-id obj)
-        (if (and (vector? obj)
-                 (vector? (vector-ref obj 0))
-                 (symbol? (class-desc-id (vector-ref obj 0))))
-            (class-desc-id (vector-ref obj 0))
-            'any-type))
+     ;; FIXME: VERY BAD object verification..
+     (define (get-class-id obj)
+       (if (and (vector? obj)
+                (vector? (vector-ref obj 0))
+                (symbol? (class-desc-id (vector-ref obj 0))))
+           (class-desc-id (vector-ref obj 0))
+           'any-type))
 
-      (define (is-subclass? class-id super-id)
-        ;; Warning: This might return true even if its not a subclass if
-        ;; an old superclass as been redefined...
-        (or (eq? class-id super-id)
-            (exists (lambda (class-super) (is-subclass? class-super super-id))
-                    (class-desc-supers
-                     (table-ref ,(rt-class-table-name) class-id)))))))
+     (define (instance-of? obj class-id)
+       (eq? (vector-ref obj 0)
+            (table-ref ,(rt-class-table-name) class-id (gensym))))
+
+     ;; Returns the super-class id, if found.
+     (define (is-subclass? class-id super-id)
+       ;; Warning: This might return true even if its not a subclass if
+       ;; an old superclass as been redefined...
+       (or (and (eq? class-id super-id) class-id)
+           (exists (lambda (class-super) (is-subclass? class-super super-id))
+                   (class-desc-supers (class-info-desc
+                                       (table-ref class-table class-id))))
+           (eq? super-id any-type)))
+     ))
 
 (define-macro (define-class name supers . fields) 
   (define temp-field-table (make-table test: eq?))
