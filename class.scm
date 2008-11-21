@@ -39,6 +39,14 @@
       (define (class-desc-supers desc) (vector-ref desc 1))
       (define (class-desc-indices-vect desc) (vector-ref desc 2))
 
+      (define (make-generic-function name args)
+        (vector name args '()))
+      (define (generic-function-name gf) (vector-ref gf 0))
+      (define (generic-function-args gf) (vector-ref gf 1))
+      (define (generic-function-instances gf) (vector-ref gf 2))
+      (define (generic-function-instances-add! gf instance)
+        (vector-set! gf 2 (cons instance (generic-function-instances gf))))
+      
       (define make-method vector) ; (make-method id types body)
       (define (method-id meth) (vector-ref meth 0))
       (define (method-types meth) (vector-ref meth 1))
@@ -142,7 +150,7 @@
          (set! instance-index (+ instance-index 1))
          ,i))
     (let* ((instance-index 1)
-           (desc (make-class-desc (gensym name) supers
+           (desc (make-class-desc name supers
                                   (+ (slot-index
                                       (cdar (take-right field-indices 1)))
                                      1))))
@@ -230,12 +238,12 @@
            (car arg))
           (else arg)))
   (define (args) (map parse-arg (cdr signature)))
-  (table-set! meth-table name '()) ; <- wouldnt work in lisp hehe
+  (table-set! meth-table name (make-generic-function name (args)))
+  ''ok
+  #;
   `(begin
      (define ,(gen-method-table-name name) (make-table test: equal?))
      (define (,name ,@(args))
-       (define (get-types arg)
-         (class-desc-id (vector-ref arg 0)))
        (let ((types (map get-class-id (list ,@(args)))))
          (cond
           ((table-ref ,(gen-method-table-name name) types #f)
@@ -257,9 +265,7 @@
   (define (parse-arg arg)
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
            (let ((var (car arg))
-                 (type (class-desc-id
-                        (class-info-desc
-                         (table-ref class-table (cadr arg))))))
+                 (type (cadr arg)))
              (values var type)))
           (else (values arg any-type))))
   ;; Returns 2 values: the ordrered list of arguments and the ordered
@@ -277,20 +283,44 @@
    (lambda ()
      (cond
       ((table-ref meth-table (name) #f) =>
-       (lambda (current-meth-data)
+       (lambda (gen-fun)
          (receive (args types) (parse-args (cdr signature))
-          (table-set! meth-table
-                      (name)
-                      (cons (make-method (name) types
-                                         `(lambda ,args ,bod ,@bods))
-                            current-meth-data))
+                  (generic-function-instances-add!
+                   gen-fun
+                   (make-method (name) types `(lambda ,args ,bod ,@bods)))
+          ''ok
+          #;
           `(table-set! ,(gen-method-table-name (name))
                        ',types
                        (lambda ,args ,bod ,@bods)))))
       (else (raise unknown-meth-error))))))
 
+(define-macro (setup-generic-functions!)
+  `(begin
+     ,@(map
+        (lambda (gen-fun)
+          (let ((name (generic-function-name gen-fun))
+                (args (generic-function-args gen-fun))
+                (instances (generic-function-instances gen-fun)))
+           `(begin
+              (define ,(gen-method-table-name name) (make-table test: equal?))
+              (define (,name ,@args)
+                (let ((types (map get-class-id (list ,@args))))
+                  (cond
+                   ((table-ref ,(gen-method-table-name name) types #f)
+                    => (lambda (method) (method ,@args)))
+                   (else
+                    (error (string-append
+                            "Unknown method: "
+                            (with-output-to-string
+                              ""
+                              (lambda ()
+                                (pretty-print `(,,name ,@types)))))))))))))
+        (map cdr (table->list meth-table)))
+     (polymorphize-methods!)))
 
-(define-macro (polymorphize-methods! test1 test2)
+
+(define-macro (polymorphize-methods!)
   (define (is-subclass? class-id super-id)
     ;; Warning: This might return true even if its not a subclass if
     ;; an old superclass as been redefined...
@@ -337,40 +367,41 @@
   
   (load "scm-lib.scm")
 
-  (pp `((is-subclass? ,test1 ,test2) => ,(is-subclass? test1 test2)))
-  (pp `((find-super-classes ,test1) => ,(find-super-classes test1)))
-  (pp `((find-super-classes ,test2) => ,(find-super-classes test2)))
-  (pp `((sort-class-specific-order (map car (table->list class-table))) =>
-        ,(sort-class-specific-order (map car (table->list class-table)))))
+;;   (pp `((is-subclass? ,test1 ,test2) => ,(is-subclass? test1 test2)))
+;;   (pp `((find-super-classes ,test1) => ,(find-super-classes test1)))
+;;   (pp `((find-super-classes ,test2) => ,(find-super-classes test2)))
+;;   (pp `((sort-class-specific-order (map car (table->list class-table))) =>
+;;         ,(sort-class-specific-order (map car (table->list class-table)))))
 
   ;; runtime generated code that will insert the most specific method
   ;; instance for subclasses without generic method instances.
   `(begin
-     ,@(map
-        (lambda (gen-method)
-          (let ((gen-meth-name (car gen-method))
-                (gen-meth-instances (cdr gen-method)))
-            (pp `(test-meth-name: ,gen-meth-name))
-            (pp `(instances: ,gen-meth-instances))
-            (pp `(sorted instances: ,(sort-methods gen-meth-instances)))
-            (map
-             (lambda (method)
-               (pp `(test ,(apply cartesian-product
-                                  (map find-sub-classes
-                                       (method-types method)))))
-               (map
-                (lambda (possible-types)
-                  (if (not (exists (lambda (m) (equal? possible-types
-                                                       (method-types m)))
-                                   gen-meth-instances))
-                      `(table-set! ,(gen-method-table-name gen-meth-name)
-                                   ,possible-types
-                                   ,(method-body method))
-                      'nothing-to-add))
-                (apply cartesian-product
-                       (map find-sub-classes (method-types method)))))
-             (sort-methods gen-meth-instances))))
-        (table->list meth-table))))
+     ,@(apply
+        reverse-append
+        (map
+         (lambda (gen-method)
+           (let ((gen-meth-name (generic-function-name gen-method))
+                 (gen-meth-instances (generic-function-instances gen-method)))
+;;              (pp `(test-meth-name: ,gen-meth-name))
+;;              (pp `(instances: ,gen-meth-instances))
+;;              (pp `(sorted instances: ,(sort-methods gen-meth-instances)))
+             (apply
+              reverse-append
+              (map
+               (lambda (method)
+                 (map
+                  (lambda (possible-types)
+                    (if (not (exists (lambda (m) (equal? possible-types
+                                                         (method-types m)))
+                                     gen-meth-instances))
+                        `(table-set! ,(gen-method-table-name gen-meth-name)
+                                     ',possible-types
+                                     ,(method-body method))
+                        ''nothing-to-add))
+                  (apply cartesian-product
+                         (map find-sub-classes (method-types method)))))
+               (sort-methods gen-meth-instances)))))
+         (map cdr (table->list meth-table))))))
 
 
 
