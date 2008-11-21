@@ -157,7 +157,6 @@
                  ((is-class-slot? fi)
                   (vector-set! desc index 'unbound-class-slot))
                  (else
-                  (pp fi)
                   (error "Unknown slot type")))))
        (map cdr field-indices))
       desc))
@@ -218,7 +217,6 @@
             fields)
   (let* ((field-indices (sort-field-indices (table->list temp-field-table)))
          (class-desc (gen-descriptor field-indices)))
-    (pp field-indices)
 
     (table-set! class-table name (make-class-info field-indices class-desc))
     `(begin ,@(gen-accessors field-indices)
