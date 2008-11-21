@@ -290,34 +290,62 @@
       (else (raise unknown-meth-error))))))
 
 
+(define-macro (polymorphize-methods! test1 test2)
+  (define (is-subclass? class-id super-id)
+    ;; Warning: This might return true even if its not a subclass if
+    ;; an old superclass as been redefined...
+    (or (eq? class-id super-id)
+        (exists (lambda (class-super) (is-subclass? class-super super-id))
+                (class-desc-supers (class-info-desc
+                                    (table-ref class-table class-id))))))
+  #;
+  (define (find-sub-classes class-id)
+    (filter (lambda (current-class) (is-subclass? current-class class-id))
+            (map car (table->list class-table) )))
+
+  (define (find-super-classes class-id)
+    (filter (lambda (current-class) (is-subclass? class-id current-class))
+            (map car (table->list class-table))))
+  
+  (define (sort-class-specific-order class-lst)
+    (define (get-super-numbers class-id)
+      (length
+       (apply generic-multi-union
+              eq?
+              (map find-super-classes
+                   (class-desc-supers (class-info-desc
+                                       (table-ref class-table class-id)))))))
+    (define (class-comparator fun)
+      (lambda (c1 c2)
+        (fun (get-super-numbers c1) (get-super-numbers c2))))
+    (quick-sort (class-comparator <) (class-comparator =) (class-comparator >)
+                class-lst))
+  (load "scm-lib.scm")
+
+  (pp `((is-subclass? ,test1 ,test2) => ,(is-subclass? test1 test2)))
+  (pp `((find-sub-classes ,test1) => ,(find-sub-classes test1)))
+  (pp `((find-sub-classes ,test2) => ,(find-sub-classes test2)))
+  (pp `((sort-class-specific-order (map car (table->list class-table))) =>
+        ,(sort-class-specific-order (map car (table->list class-table))))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(include "scm-lib-macro.scm")
+(include "test-macro.scm")
+(load "scm-lib.scm")
+(load "test.scm")
+
+(init)
+
 ;; FIXME: VERY BAD object verification..
 (define (get-class-id obj)
   (if (and (vector? obj)
            (vector? (vector-ref obj 0))
            (symbol? (class-desc-id (vector-ref obj 0))))
       (class-desc-id (vector-ref obj 0))
-      any-type))
-
-
-#;
-(define-macro (polymorphize-methods!)
-  (define (is-subclass? class-id super-id)
-    (or (eq? class-id super-id)
-        (exists (lambda (class-super) (is-subclass? class-super super-id))
-                (class-super (class-info-desc
-                              (table-ref class-table class-id))))))
-  (define (find-sub-classes class-id)
-    ))
-
-(init)
-
-
-
-;;; Runtime stuff ;;;
-(include "scm-lib-macro.scm")
-(include "test-macro.scm")
-(load "scm-lib.scm")
-(load "test.scm")
+      'any-type))
 
 
 
