@@ -77,10 +77,12 @@
       (define (make-slot type index) (cons type index))
       (define (is-class-slot? slot-info)
         (and (pair? slot-info)
-             (eq? (car slot-info) class:)))
+             (eq? (slot-type slot-info) class:)))
       (define (is-instance-slot? slot-info)
         (and (pair? slot-info)
-             (eq? (car slot-info) instance:)))
+             (eq? (slot-type slot-info) instance:)))
+      (define (slot-type slot-info)
+        (car slot-info))
       (define (slot-index slot-info)
         (cdr slot-info))
 
@@ -98,37 +100,8 @@
       (define (method-types meth) (vector-ref meth 1))
       (define (method-body meth) (vector-ref meth 2))
 
-      
+      )))
 
-
-      )
-
-   ;; Runtime librairy. Most functions are not hygienic.
-   #;
-   `(begin
-      (define (class-desc-id desc) (vector-ref desc 0))
-      (define (class-desc-supers desc) (vector-ref desc 1))
-      (define (class-desc-indices-vect desc) (vector-ref desc 2))
-
-      ;; Runtime class table
-      (define ,(rt-class-table-name) (make-table test: eq?))
-
-      ;; FIXME: VERY BAD object verification..
-      (define (get-class-id obj)
-        (if (and (vector? obj)
-                 (vector? (vector-ref obj 0))
-                 (symbol? (class-desc-id (vector-ref obj 0))))
-            (class-desc-id (vector-ref obj 0))
-            'any-type))
-
-      (define (is-subclass? class-id super-id)
-        ;; Warning: This might return true even if its not a subclass if
-        ;; an old superclass as been redefined...
-        (or (eq? class-id super-id)
-            (exists (lambda (class-super) (is-subclass? class-super super-id))
-                    (class-desc-supers
-                     (table-ref ,(rt-class-table-name) class-id))))))
-   ))
 
 (define-macro (init-rt)
   `(begin
@@ -158,7 +131,11 @@
            (exists (lambda (class-super) (is-subclass? class-super super-id))
                    (class-desc-supers
                     (table-ref ,(rt-class-table-name) class-id)))
-           (eq? super-id 'any-type)))))
+           (eq? super-id 'any-type)))
+
+     (define-generic (describe obj))
+
+     ))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -298,8 +275,28 @@
        (define (,(gen-predicate-name name) ,obj)
          (is-subclass? (class-desc-id (vector-ref ,obj 0))
                        ',name))))
-  
 
+  (define (gen-printfun field-indices)
+    ;; not clean hehe, obj uses a gensym but not the rest of the code...
+    ;; i dont believe that the codes need hygiene here anyways...
+    (define obj (gensym 'obj))
+    (define (field->list f)
+      (let ((fname (car f))
+            (slot-info (cdr f)))
+        (if (is-instance-slot? slot-info)
+            (list 'list slot: `',fname ''=
+              (list (gen-accessor-name name fname) obj))
+            (list 'list class-slot: `',fname ''=
+              (list (gen-accessor-name name fname))))))
+    
+    `(define-method (describe ,obj . opts)
+       (let ((port (if (null? opts)
+                       (current-output-port)
+                       (car opts))))
+        (pretty-print
+         (list ,@(map field->list field-indices))
+         port))))
+  
   (define (sort-field-indices field-indices)
     (define-macro (indice-comp op)
       (let ((x (gensym 'x)) (y (gensym 'y)))
@@ -346,6 +343,8 @@
             ,@(gen-setters field-indices)
             ,(gen-predicate)
             ,(gen-instantiator field-indices)
+            ;; Create a generi print utility (must be at the end)
+            ,(gen-printfun field-indices)
             ;; here the class descriptor is put in a global table
             ;; but it is also available via its variable ,(class-desc-name name)
             (table-set! ,(rt-class-table-name)
@@ -409,12 +408,7 @@
                   (generic-function-instances-add!
                    gen-fun
                    (make-method (name) types `(lambda ,args ,bod ,@bods)))
-                  ;; not efficient, will recalculate the polymorphism
-                  ;; at each method declration, but enables iterative
-                  ;; development. Something else can be returned here
-                  ;; (eg: ''ok) and (setup-generic-functions!) could
-                  ;; then be called by hand for better performances
-                  '(setup-generic-functions!)))
+                  '(setup-generic-functions!))))
       (else (raise unknown-meth-error))))))
 
 (define-macro (setup-generic-functions!)
@@ -535,7 +529,9 @@
                ;; the one with the most specific instance should
                ;; appear last!
                (reverse (sort-methods gen-meth-instances))))))
-         (map cdr (table->list meth-table))))))
+         ;; filter the empty genric functions (with no instances)
+         (filter (lambda (m) (not (null? (generic-function-instances m))))
+                 (map cdr (table->list meth-table)))))))
 
 
 
