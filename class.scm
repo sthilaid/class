@@ -117,8 +117,11 @@
        (if (and (vector? obj)
                 (vector? (vector-ref obj 0))
                 (symbol? (class-desc-id (vector-ref obj 0))))
-           (class-desc-id (vector-ref obj 0))
-           'any-type))
+           (let ((id (class-desc-id (vector-ref obj 0))))
+             ;; this test ensures that its a valid class
+             (if (table-ref ,(rt-class-table-name) id #f)
+                 id
+                 'any-type))))
 
      (define (instance-of? obj class-id)
        (eq? (vector-ref obj 0)
@@ -135,6 +138,19 @@
 
      (define-generic (describe obj))
 
+     ;; A usefull function provided by Marc :)
+     (define (add-pp-method! type-predicate transformer)
+       (let* ((old-wr
+               ##wr)
+              (new-wr
+               (lambda (we obj)
+                 (old-wr we
+                         (if (type-predicate obj)
+                             (transformer obj)
+                             obj)))))
+         (set! ##wr new-wr)))
+
+     'object-system-loaded
      ))
 
 
@@ -289,13 +305,8 @@
             (list 'list class-slot: `',fname ''=
               (list (gen-accessor-name name fname))))))
     
-    `(define-method (describe ,obj . opts)
-       (let ((port (if (null? opts)
-                       (current-output-port)
-                       (car opts))))
-        (pretty-print
-         (list ,@(map field->list field-indices))
-         port))))
+    `(define-method (describe ,obj)
+       (list ,@(map field->list field-indices))))
   
   (define (sort-field-indices field-indices)
     (define-macro (indice-comp op)
@@ -351,6 +362,12 @@
                         ',name
                         ,(class-desc-name name)))))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Generic methods
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define-macro (define-generic signature)
   (define name (meth-name signature))
   (define (parse-arg arg)
@@ -358,6 +375,7 @@
            (car arg))
           (else arg)))
   (define (args) (map parse-arg (cdr signature)))
+  
   (table-set! meth-table name (make-generic-function name (args)))
   ''ok
   #;
@@ -454,7 +472,13 @@
      ;; Insert the most specific generic function instance for all
      ;; possible of valid type combinations for the arguments. (not
      ;; efficient, but made at compile time).
-     (polymorphize-methods!)))
+     (polymorphize-methods!)
+
+     `(pp 'toto)
+     `(add-pp-method!
+       (lambda (obj) (not (eq? (get-class-id obj) 'any-type)))
+       describe)))
+
 
 
 
