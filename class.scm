@@ -409,11 +409,12 @@
                   (generic-function-instances-add!
                    gen-fun
                    (make-method (name) types `(lambda ,args ,bod ,@bods)))
-          ''ok
-          #;
-          `(table-set! ,(gen-method-table-name (name))
-                       ',types
-                       (lambda ,args ,bod ,@bods)))))
+                  ;; not efficient, will recalculate the polymorphism
+                  ;; at each method declration, but enables iterative
+                  ;; development. Something else can be returned here
+                  ;; (eg: ''ok) and (setup-generic-functions!) could
+                  ;; then be called by hand for better performances
+                  '(setup-generic-functions!)))
       (else (raise unknown-meth-error))))))
 
 (define-macro (setup-generic-functions!)
