@@ -564,6 +564,15 @@
                  (map cdr (table->list meth-table)))))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utilities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define-macro (update! obj class field f)
+  (let ((objval (gensym 'objval)))
+   `(let ((,objval ,obj))
+      (,(gen-setter-name class field) ,objval
+       (,f (,(gen-accessor-name class field) ,objval))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
