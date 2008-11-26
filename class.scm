@@ -26,11 +26,12 @@
                                  (map symbol->string ss))))
 
       ;; Returns the super-class id, if found.
-      (define (is-subclass? class-id super-id)
+      (define (macro-is-subclass? class-id super-id)
         ;; Warning: This might return true even if its not a subclass if
         ;; an old superclass as been redefined...
         (or (and (eq? class-id super-id) class-id)
-            (exists (lambda (class-super) (is-subclass? class-super super-id))
+            (exists (lambda (class-super)
+                      (macro-is-subclass? class-super super-id))
                     (class-desc-supers (class-info-desc
                                         (table-ref class-table class-id))))
             (eq? super-id any-type)))
@@ -121,7 +122,8 @@
              ;; this test ensures that its a valid class
              (if (table-ref ,(rt-class-table-name) id #f)
                  id
-                 'any-type))))
+                 'any-type))
+           'any-type))
 
      (define (instance-of? obj class-id)
        (eq? (vector-ref obj 0)
@@ -305,7 +307,7 @@
             (list 'list class-slot: `',fname ''=
               (list (gen-accessor-name name fname))))))
     
-    `(define-method (describe ,obj)
+    `(define-method (describe (,obj ,name))
        (list ,@(map field->list field-indices))))
   
   (define (sort-field-indices field-indices)
@@ -427,6 +429,7 @@
                    gen-fun
                    (make-method (name) types `(lambda ,args ,bod ,@bods)))
                   '(setup-generic-functions!))))
+      
       (else (raise unknown-meth-error))))))
 
 (define-macro (setup-generic-functions!)
@@ -469,26 +472,29 @@
                             instances))))
               all-generic-functions))
 
+     (begin 'DEGUG--begin-of-polymorphing!--) ;; DEBUGING
+     
      ;; Insert the most specific generic function instance for all
      ;; possible of valid type combinations for the arguments. (not
      ;; efficient, but made at compile time).
      (polymorphize-methods!)
 
-     `(pp 'toto)
-     `(add-pp-method!
-       (lambda (obj) (not (eq? (get-class-id obj) 'any-type)))
-       describe)))
+     (add-pp-method!
+      (lambda (obj) (not (eq? (get-class-id obj) 'any-type)))
+      describe)))
 
 
 
 
 (define-macro (polymorphize-methods!)
   (define (find-sub-classes class-id)
-    (filter (lambda (current-class) (is-subclass? current-class class-id))
+    (filter (lambda (current-class)
+              (macro-is-subclass? current-class class-id))
             (map car (table->list class-table) )))
 
   (define (find-super-classes class-id)
-    (filter (lambda (current-class) (is-subclass? class-id current-class))
+    (filter (lambda (current-class)
+              (macro-is-subclass? class-id current-class))
             (map car (table->list class-table))))
 
   (define (get-super-numbers class-id)
