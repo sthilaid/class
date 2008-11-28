@@ -1,5 +1,29 @@
 ;; Very simple object system which focuses on runtime speed.
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Expansion context setup
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; these 2 macros sets up the context in which the class system is
+;; used. If the iterative-method-dev is chosen (default), the generic
+;; function (polymorphism) are reset at each new method definition,
+;; which enables iterative developpement in a repl. This is not
+;; suitable for compiled code (exploses the code size), so the manual
+;; mode lets the user decide when to generate the methods with a
+;; manual call to (setup-generic-functions!) in the user code.
+;;
+;; These macros should be called just after including this file.
+
+(define-macro (set-iterative-method-developpement!)
+  (set! mode 'iterative))
+
+(define-macro (set-manual-method-developpement!)
+  (set! mode 'manual))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Macro expansion time env
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Initializes the global define-class macro-expension-time
 ;; environnment. This macro must be called
@@ -7,6 +31,9 @@
   ;; macro exp time librairy
   (eval
    '(begin
+      ;; method expansion mode
+      (define mode 'iterative) ; iterative as default
+      
       ;; starts to 2 because 0/1 are reserved for the class id and supers
       (define desc-index 1) 
       (define class-table (make-table test: eq?))
@@ -100,9 +127,12 @@
       (define (method-id meth) (vector-ref meth 0))
       (define (method-types meth) (vector-ref meth 1))
       (define (method-body meth) (vector-ref meth 2))
-
       )))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Runtime lib
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (init-rt)
   `(begin
@@ -428,13 +458,14 @@
                   (generic-function-instances-add!
                    gen-fun
                    (make-method (name) types `(lambda ,args ,bod ,@bods)))
-                  '(setup-generic-functions!))))
-      
+                  (case mode
+                   ((iterative) '(setup-generic-functions!))
+                   ((manual)    ''ok)
+                   (else        (error "unknown method expansion mode."))))))
       (else (raise unknown-meth-error))))))
 
 (define-macro (setup-generic-functions!)
   (define all-generic-functions (map cdr (table->list meth-table)))
-
   `(begin
      ;; Setup the tables and meta-functions that will search for the
      ;; appropriate generic function instance. The search should be in

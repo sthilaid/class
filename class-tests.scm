@@ -6,6 +6,7 @@
 (include "class.scm")
 (load "scm-lib.scm")
 (load "test.scm")
+(set-iterative-method-developpement!)
 
 
 (define-class A ()      (slot: a) (class-slot: csa))
