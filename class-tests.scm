@@ -148,7 +148,12 @@
         'ok
         'no)))
 
-  
+(define-test test-equal-and-copy "#t#t" #f
+  (let ((o1 (make-A 1))
+        (o2 (make-B 1 2)))
+    (display (equal? o2 (make-B 1 2)))
+    (display (equal? o2 (object-light-copy o2)))
+    (equal? o1 o2))) 
 
 
 

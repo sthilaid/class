@@ -155,6 +155,19 @@
                  'any-type))
            'any-type))
 
+     ;; This produces a "light" copy because the fiels are simply
+     ;; copied by value, not deeply replicated. Thus a pointer to a
+     ;; data structure will be copied as a pointer to the same data
+     ;; structure.
+     (define (object-light-copy obj)
+       (let* ((len (vector-length obj))
+              (new-obj (make-vector len #f)))
+         (let loop ((i 0))
+           (if (< i len)
+               (begin (vector-set! new-obj i (vector-ref obj i))
+                      (loop (+ i 1)))))
+         new-obj))
+
      (define (instance-of? obj class-id)
        (eq? (vector-ref obj 0)
             (table-ref ,(rt-class-table-name) class-id (gensym))))
