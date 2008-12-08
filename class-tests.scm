@@ -20,11 +20,17 @@
 (define-method (test (a A)) (number->string (A-a a)))
 (define-method (test (b B)) (symbol->string (B-b b)))
 (define-method (test (c C)) (number->string (+ (C-c c) 5)))
+(define-method (test (e E)) 'e)
 
 (define-generic (test2 o1 o2))
 (define-method (test2 (a1 A) (a2 A)) (+ (A-a a1) (A-a a2)))
 (define-method (test2 (b1 B) (b2 B)) (symbol-append (B-b b1) (B-b b2)))
 (define-method (test2 (a A)  (c C))  (+ (A-a a) (C-c c)))
+
+(define-generic (test3 o))
+(define-method (test3 (o A)) 'a)
+(define-method (test3 (o B)) 'b)
+(define-method (test3 (o E)) 'e)
 
 (define-generic (h x y))
 (define-method (h x y) x)
@@ -156,6 +162,15 @@
     (equal? o1 o2))) 
 
 
-
+(define-test test-casts "abeaa" 'ok
+  (let ((obj-a (make-A 1))
+        (obj-b (make-B 1 2))
+        (obj-e (make-E 1 2 3 4 5)))
+    (display (test3 obj-a))
+    (display (test3 obj-b))
+    (display (test3 obj-e))
+    (display (test3 (cast obj-b 'A)))
+    (display (test3 (cast obj-e 'A)))
+    'ok))
 
 ;; (pp (lambda () (setup-generic-functions!)))

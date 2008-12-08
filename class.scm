@@ -143,17 +143,32 @@
      ;; Runtime class table
      (define ,(rt-class-table-name) (make-table test: eq?))
 
+
+     (define (object? obj)
+       (and (vector? obj)
+            (vector? (vector-ref obj 0))
+            (symbol? (class-desc-id (vector-ref obj 0)))))
+
+     (define (cast obj type) (vector cast: obj type))
+     (define (cast? obj)
+       (and (vector? obj)
+            (eq? (vector-ref obj 0) cast:)
+            (= (vector-length obj) 3)))
+     (define (cast-obj  c) (vector-ref c 1))
+     (define (cast-type c) (vector-ref c 2))
+     (define (uncast obj) (if (cast? obj) (cast-obj obj) obj))
+       
      ;; FIXME: VERY BAD object verification..
      (define (get-class-id obj)
-       (if (and (vector? obj)
-                (vector? (vector-ref obj 0))
-                (symbol? (class-desc-id (vector-ref obj 0))))
-           (let ((id (class-desc-id (vector-ref obj 0))))
-             ;; this test ensures that its a valid class
-             (if (table-ref ,(rt-class-table-name) id #f)
-                 id
-                 'any-type))
-           'any-type))
+       (cond
+        ((object? obj)
+         (let ((id (class-desc-id (vector-ref obj 0))))
+           ;; this test ensures that its a valid class
+           (if (table-ref ,(rt-class-table-name) id #f)
+               id
+               'any-type)))
+        ((cast? obj) (cast-type obj))
+        (else 'any-type)))
 
      ;; This produces a "light" copy because the fiels are simply
      ;; copied by value, not deeply replicated. Thus a pointer to a
@@ -493,7 +508,8 @@
                 (let ((types (map get-class-id (list ,@args))))
                   (cond
                    ((table-ref ,(gen-method-table-name name) types #f)
-                    => (lambda (method) (method ,@args)))
+                    => (lambda (method)
+                         (apply method (map uncast ,(cons 'list args)))))
                    (else
                     (error (string-append
                             "Unknown method: "
