@@ -102,18 +102,25 @@
       (define (class-desc-indices-vect desc) (vector-ref desc 2))
 
 
-      (define (make-slot type index) (cons type index))
+      (define (make-slot type index options) (vector type index options))
       (define (is-class-slot? slot-info)
-        (and (pair? slot-info)
-             (eq? (slot-type slot-info) class:)))
+        (and (vector? slot-info)
+             (eq? (slot-type slot-info) class-slot:)))
       (define (is-instance-slot? slot-info)
-        (and (pair? slot-info)
-             (eq? (slot-type slot-info) instance:)))
+        (and (vector? slot-info)
+             (eq? (slot-type slot-info) slot:)))
       (define (slot-type slot-info)
-        (car slot-info))
+        (vector-ref slot-info 0))
       (define (slot-index slot-info)
-        (cdr slot-info))
+        (vector-ref slot-info 1))
+      (define (slot-options slot-info)
+        (vector-ref slot-info 2))
 
+      ;; returns the slot hooks, if any is present.
+      (define (slot-hooks? slot-info)
+        (let* ((options (slot-options slot-info))
+               (hooks (assq hooks: options)))
+          (if hooks (cdr hooks) #f)))
         
       (define (make-generic-function name args)
         (vector name args '()))
@@ -230,23 +237,20 @@
   (define (process-field! field)
     (cond
      ((and (list? field)         ; FIXME: should this test be removed?
-           (= (length field) 2)
-           (eq? (car field) slot:))
-      (let ((slot-name (cadr field)))
+           (>= (length field) 2))
+      (let ((slot-type (case (car field)
+                         ((slot: class-slot:) (car field))
+                         (else (error "Bad slot type!"))))
+            (slot-name (cadr field))
+            (slot-options (cddr field)))
         ;; If a field is already provided by a super class
         ;; then the super class's is used ...
         (if (not (table-ref temp-field-table slot-name #f))
             (table-set! temp-field-table
                         slot-name
-                        (make-slot instance: (next-desc-index))))))
-     ((and (list? field)         ; FIXME: should this test be removed?
-           (= (length field) 2)
-           (eq? (car field) class-slot:))
-      (let ((slot-name (cadr field)))
-        (if (not (table-ref temp-field-table slot-name #f))
-            (table-set! temp-field-table
-                        slot-name
-                        (make-slot class: (next-desc-index))))))))
+                        (make-slot slot-type
+                                   (next-desc-index)
+                                   slot-options)))))))
 
   (define (gen-accessors field-indices)
     (define (gen-accessor field slot-info)
@@ -282,7 +286,8 @@
           `(define (,(gen-setter-name name field) ,obj ,val)
              (vector-set! ,obj
                           (vector-ref (vector-ref ,obj 0) ,index)
-                          ,val))))))
+                          ,val))))
+       (else (error "gen-setters: unknown class slot"))))
     ;; Generate a list of all the setters
     (if (not (pair? field-indices))
         '()
