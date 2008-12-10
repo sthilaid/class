@@ -117,9 +117,13 @@
         (vector-ref slot-info 2))
 
       ;; returns the slot hooks, if any is present.
-      (define (slot-hooks? slot-info)
+      (define (slot-read-hooks? slot-info)
         (let* ((options (slot-options slot-info))
-               (hooks (assq hooks: options)))
+               (hooks (assq read-hooks: options)))
+          (if hooks (cdr hooks) #f)))
+      (define (slot-write-hooks? slot-info)
+        (let* ((options (slot-options slot-info))
+               (hooks (assq write-hooks: options)))
           (if hooks (cdr hooks) #f)))
         
       (define (make-generic-function name args)
@@ -254,17 +258,27 @@
 
   (define (gen-accessors field-indices)
     (define (gen-accessor field slot-info)
-      (cond
-       ((is-class-slot? slot-info)
-        (let ((index (slot-index slot-info)))
-          `(define (,(gen-accessor-name name field))
-             (vector-ref ,(class-desc-name name) ,index))))
-
-       ((is-instance-slot? slot-info)
-        (let ((index (slot-index slot-info)))
-          `(define (,(gen-accessor-name name field) ,obj)
-             (vector-ref ,obj
-                         (vector-ref (vector-ref ,obj 0) ,index)))))))
+      (let* ((index (slot-index slot-info))
+             (read-hooks (slot-read-hooks? slot-info))
+             (slot-access
+              (cond ((is-class-slot? slot-info)
+                     `(vector-ref ,(class-desc-name name) ,index))
+                    ((is-instance-slot? slot-info)
+                     `(vector-ref ,obj
+                                  (vector-ref (vector-ref ,obj 0) ,index)))
+                    (else (error "gen-accesors: unknown class slot"))))
+             (signature
+              (cond ((is-class-slot? slot-info)
+                     `(,(gen-accessor-name name field)))
+                    ((is-instance-slot? slot-info)
+                     `(,(gen-accessor-name name field) ,obj)))))
+        `(define ,signature
+           ,(if read-hooks
+                `(let ((slot-value ,slot-access))
+                   (for-each (lambda (hook) (hook slot-value))
+                             (list ,@read-hooks))
+                   slot-value)
+                slot-access))))
     ;; Generate a list of all the accesssors
     (if (not (pair? field-indices))
         '()
@@ -275,19 +289,28 @@
   
   (define (gen-setters field-indices)
     (define (gen-setter field slot-info)
-      (cond
-       ((is-class-slot? slot-info)
-        (let ((index (slot-index slot-info)))
-          `(define (,(gen-setter-name name field) ,val)
-             (vector-set! ,(class-desc-name name) ,index ,val))))
-       
-       ((is-instance-slot? slot-info)
-        (let ((index (slot-index slot-info)))
-          `(define (,(gen-setter-name name field) ,obj ,val)
-             (vector-set! ,obj
-                          (vector-ref (vector-ref ,obj 0) ,index)
-                          ,val))))
-       (else (error "gen-setters: unknown class slot"))))
+      (let* ((index (slot-index slot-info))
+             (write-hooks (slot-write-hooks? slot-info))
+             (slot-set!
+              (cond ((is-class-slot? slot-info)
+                     `(vector-set! ,(class-desc-name name) ,index ,val))
+                    ((is-instance-slot? slot-info)
+                     `(vector-set! ,obj
+                                   (vector-ref (vector-ref ,obj 0) ,index)
+                                   ,val))
+                    (else (error "gen-setters: unknown class slot"))))
+             (signature
+              (cond ((is-class-slot? slot-info)
+                     `(,(gen-setter-name name field) ,val))
+                    ((is-instance-slot? slot-info)
+                     `(,(gen-setter-name name field) ,obj ,val)))))
+        ;; (define (blabla ... ,val) ...)
+        `(define ,signature
+           ,(if write-hooks
+                `(begin (for-each (lambda (hook) (hook ,val))
+                                  (list ,@write-hooks))
+                        ,slot-set!)
+                slot-set!))))
     ;; Generate a list of all the setters
     (if (not (pair? field-indices))
         '()

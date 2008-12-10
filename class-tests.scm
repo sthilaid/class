@@ -173,4 +173,24 @@
     (display (test3 (cast obj-e 'A)))
     'ok))
 
+;; Testing slot hooks
+(define-class hooked ()
+  (slot:       s
+               (read-hooks:  (lambda (x) (display "r") (display x)))
+               (write-hooks: (lambda (x) (display "w") (display x))))
+  (class-slot: cs
+               (read-hooks:  (lambda (x) (display "r") (display x)))
+               (write-hooks: (lambda (x) (display "w") (display x)))))
+
+(define-test test-hooks "wallor1w2r2rallowsalutrsalut" 'ok
+  (let ((o (make-hooked 1)))
+    (hooked-cs-set! 'allo)
+    (hooked-s o)
+    (hooked-s-set! o 2)
+    (hooked-s o)
+    (hooked-cs)
+    (hooked-cs-set! 'salut)
+    (hooked-cs)
+    'ok))
+
 ;; (pp (lambda () (setup-generic-functions!)))
