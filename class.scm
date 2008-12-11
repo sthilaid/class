@@ -329,8 +329,10 @@
          ,i))
     (let* ((instance-index 1)
            (desc (make-class-desc name supers
-                                  (+ (slot-index
-                                      (cdar (take-right field-indices 1)))
+                                  (+ (if (pair? field-indices)
+                                         (slot-index
+                                          (cdar (take-right field-indices 1)))
+                                         0)
                                      1))))
       ;; For each field, insert the instance index if it is an
       ;; instance slot or, simply add an unbound notice for a class
