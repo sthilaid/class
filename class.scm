@@ -271,11 +271,16 @@
               (cond ((is-class-slot? slot-info)
                      `(,(gen-accessor-name name field)))
                     ((is-instance-slot? slot-info)
-                     `(,(gen-accessor-name name field) ,obj)))))
+                     `(,(gen-accessor-name name field) ,obj))))
+             (hook-call
+              (cond ((is-class-slot? slot-info)
+                     `(hook slot-value))
+                    ((is-instance-slot? slot-info)
+                     `(hook ,obj slot-value)))))
         `(define ,signature
            ,(if read-hooks
                 `(let ((slot-value ,slot-access))
-                   (for-each (lambda (hook) (hook slot-value))
+                   (for-each (lambda (hook) ,hook-call)
                              (list ,@read-hooks))
                    slot-value)
                 slot-access))))
@@ -303,11 +308,16 @@
               (cond ((is-class-slot? slot-info)
                      `(,(gen-setter-name name field) ,val))
                     ((is-instance-slot? slot-info)
-                     `(,(gen-setter-name name field) ,obj ,val)))))
+                     `(,(gen-setter-name name field) ,obj ,val))))
+             (hook-call
+              (cond ((is-class-slot? slot-info)
+                     `(hook ,val))
+                    ((is-instance-slot? slot-info)
+                     `(hook ,obj ,val)))))
         ;; (define (blabla ... ,val) ...)
         `(define ,signature
            ,(if write-hooks
-                `(begin (for-each (lambda (hook) (hook ,val))
+                `(begin (for-each (lambda (hook) ,hook-call)
                                   (list ,@write-hooks))
                         ,slot-set!)
                 slot-set!))))

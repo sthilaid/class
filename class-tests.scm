@@ -176,8 +176,8 @@
 ;; Testing slot hooks
 (define-class hooked ()
   (slot:       s
-               (read-hooks:  (lambda (x) (display "r") (display x)))
-               (write-hooks: (lambda (x) (display "w") (display x))))
+               (read-hooks:  (lambda (obj x) (display "r") (display x)))
+               (write-hooks: (lambda (obj x) (display "w") (display x))))
   (class-slot: cs
                (read-hooks:  (lambda (x) (display "r") (display x)))
                (write-hooks: (lambda (x) (display "w") (display x)))))
