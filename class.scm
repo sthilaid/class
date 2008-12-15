@@ -31,6 +31,9 @@
   ;; macro exp time librairy
   (eval
    '(begin
+      (include "scm-lib-macro.scm")
+      (include "scm-lib.scm")
+      
       ;; method expansion mode
       (define mode 'iterative) ; iterative as default
       
@@ -147,6 +150,9 @@
 
 (define-macro (init-rt)
   `(begin
+;;      (include "scm-lib-macro.scm")
+;;      (include "scm-lib.scm")
+     
      (define (class-desc-id desc) (vector-ref desc 0))
      (define (class-desc-supers desc) (vector-ref desc 1))
      (define (class-desc-indices-vect desc) (vector-ref desc 2))
@@ -154,13 +160,26 @@
      ;; Runtime class table
      (define ,(rt-class-table-name) (make-table test: eq?))
 
+     (define (find-class? id)
+       (table-ref ,(rt-class-table-name) id #f))
 
      (define (object? obj)
        (and (vector? obj)
             (vector? (vector-ref obj 0))
             (symbol? (class-desc-id (vector-ref obj 0)))))
 
-     (define (cast obj type) (vector cast: obj type))
+     (define (cast obj type)
+       ;; from scm-lib
+       (define (show . args)
+         (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+       (define-macro (to-string e1 . es)
+         `(with-output-to-string "" (lambda () ,e1 ,@es)))
+       (let ((class-id (get-class-id obj)))
+        (if (is-subclass? class-id type)
+            (vector cast: obj type)
+            (error
+             (to-string (show "Cannot perform cast: "
+                              class-id " is not a sublclass of " type))))))
      (define (cast? obj)
        (and (vector? obj)
             (eq? (vector-ref obj 0) cast:)
@@ -220,6 +239,12 @@
                              (transformer obj)
                              obj)))))
          (set! ##wr new-wr)))
+
+     #;
+     (define-class class ()
+       (slot: name)
+       (slot: supers)
+       )
 
      'object-system-loaded
      ))
@@ -416,9 +441,6 @@
     (quick-sort (indice-comp <) (indice-comp =) (indice-comp >)
                 field-indices))
 
-  (include "scm-lib-macro.scm")
-  (include "scm-lib.scm")
-
   ;; Process the super classes' slots
   (for-each
    (lambda (super)
@@ -509,9 +531,6 @@
   ;; Returns 2 values: the ordrered list of arguments and the ordered
   ;; list of their types.
   (define (parse-args args) (map-values parse-arg args))
-  (include "scm-lib-macro.scm")
-  (include "scm-lib.scm")
-  
   (with-exception-catcher
    (lambda (e)
      (pp `(received error: ,e))
