@@ -135,13 +135,23 @@
       (define (generic-function-args gf) (vector-ref gf 1))
       (define (generic-function-instances gf) (vector-ref gf 2))
       (define (generic-function-instances-add! gf instance)
-        (vector-set! gf 2 (cons instance (generic-function-instances gf))))
+        (let ((instances (generic-function-instances gf))
+              (inst-comparator (lambda (i1 i2)
+                                 (equal? (method-types i1)
+                                         (method-types i2)))))
+          (if (generic-member inst-comparator instance instances)
+              (vector-set! gf 2 (cons instance
+                                      (list-remove inst-comparator
+                                                   instance
+                                                   instances)))
+              (vector-set! gf 2 (cons instance instances)))))
+      
       
       (define make-method vector) ; (make-method id types body)
       (define (method-id meth) (vector-ref meth 0))
       (define (method-types meth) (vector-ref meth 1))
-      (define (method-body meth) (vector-ref meth 2))
-      )))
+      (define (method-body meth) (vector-ref meth 2)))
+   ))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -598,6 +608,8 @@
      ;; efficient, but made at compile time).
      (polymorphize-methods!)
 
+     ;; remove because it is not portable code...
+     #;
      (add-pp-method!
       (lambda (obj) (not (eq? (get-class-id obj) 'any-type)))
       describe)))
