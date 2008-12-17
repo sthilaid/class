@@ -1,0 +1,192 @@
+\documentclass[letterpaper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx, subfigure}
+\usepackage{longtable}
+\usepackage{amsmath,amsfonts}
+\usepackage{array}
+\usepackage{xspace}
+\usepackage{color, fancyvrb, relsize}
+\usepackage{url, hyperref}
+\usepackage{algorithm, algorithmic, listings}
+\usepackage[francais]{babel}
+\selectlanguage{francais}
+
+\input{scheme}
+\lstloadlanguages{Scheme}
+\lstset{language=Scheme}
+\textheight=600pt
+
+% commande qui fait en sorte que seul les Section sont numerottees
+%% \setcounter{secnumdepth}{1}
+% \setcounter{page}{0}
+\newcommand{\forcenewline}[0]{\begin{center}\end{center}}
+
+\begin{document}
+
+\title{IFT6232 - Étape 3: Optimisations d'évaluations partielles et
+  système d'objets polymorphes pour Gambit-C}
+
+\author{par Jérémie Lasalle Ratelle et David St-Hilaire}
+\maketitle
+
+\clearpage
+
+\tableofcontents
+
+\clearpage
+
+\section{Systèmes d'objets}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Introduction}
+
+Les languages de programmations se distinguent par différents concepts
+ou caractéristiques qui leurs sont propres. Le language Scheme est
+caractérisé non seulement par son système de macro très évolué et par
+les foncitons de premières classes, mais aussi par sa
+\emph{simplicité}.
+
+En effet, Scheme est un language très minimaliste. Il fut conçu de
+manière à comprendre tous les outils nécessaire, afin d'en avoir aussi
+peu que possible, contrairement à Lisp où l'approche inverse est
+utilisée. Ainsi, pour programmer en Scheme des programmes non
+triviaux, plusieurs librairies auxiliaires doivent être généralement
+écrites. Par contre, puisque le language est très expressifs, ces
+librairies peuvent être écrites rapidement.
+
+Un module intéressant à ajouter au dessus de Scheme est un système
+orienté objet. En effet, un tel système permet la création et
+l'utilisation d'objets de manières très dynamique et expressive par,
+entre autre, l'utilisation du polymorphisme et de l'héritage.
+
+Nous proposons donc pour la troisième étape de notre projet d'écrire
+un système d'objets pouvant s'ajouter à Scheme pour d'une part,
+obtenir un module utile pour tout programmeur Scheme et, d'autre part,
+démontrer qu'il est possible d'écrire rapidement un système qui peut
+sembler très complexe à première vu en utilisant la puissance
+expressive de Scheme.
+
+\clearpage
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  \subsection{Besoins et Contraintes}
+    Le système de programmation orienté objet conçu respecte plusieurs
+    contraintes dans le but de répondre à des besoins
+    correspondant. Ces contraintes sont donc indiquées dans cette
+    section en ordre d'importance.
+
+    \subsubsection{Rapidité d'accès aux champs}
+      Cette contrainte est la plus importante pour notre implantation
+      du système objet. En effet, les accès aux champs des objets sont
+      des opérations extrêmement fréquentes et donc, afin d'avoir un
+      système utilisable à l'intérieur d'applications concrètes, ces
+      accès doivent se faire le plus rapidement possible afin de
+      diminuer l'impacte du coût de l'utilisaiton d'un système
+      d'objets.
+
+    \subsubsection{Rapidité de choix d'instances de méthode générique}
+      De manière similaire à la contrainte reliée à l'accès aux
+      champs, notre système objets doit permettre d'obtenir rapidement
+      l'instance correspondant à un appel de fonction générique. Cette
+      contrainte impose donc aux fonctions générique de ne pas évaluer
+      dynamiquement quelle serait la meilleure instance d'une fonction
+      générique pour les types des objets passés en paramètres.
+
+    \subsubsection{Modularité}
+      Le système doit être facile à intégrer à une application écrite
+      en Scheme. Donc elle devrait pouvoir être incluse comme toute
+      librairie et ne pas être intégrée directement dans une
+      implantation de Scheme, pour faciliter l'utilisation.
+
+    \subsubsection{Interface à la CLOS}
+      Le système d'objet devrait avoir une interface similaire à celle
+      fournie par le système objets du language Common
+      Lisp~\cite{COMMONLISP} (Common Lisp Object System, ou encore
+      CLOS). Puisque Scheme est une version épurée de Common Lisp et
+      puisque CLOS est déjà bien connu et à fait ses preuves en tant
+      qu'utilisabilité, il serait donc naturel qu'un système d'objets
+      pour Scheme respecte des conventions d'utilisations et des
+      concepts similaires à ceux qui sont déjà bien connu chez CLOS,
+      afin d'augmenter l'accessibilité du système.
+    
+    \subsubsection{Développement intéractif}
+      Il serait intéressant que le système permette de pouvoir faire
+      du développement itératif (de manière interactive avec un REPL)
+      de manière à ce que le système soit cohérent avec la philosophie
+      de développement généralement utilisée en Scheme, \textit{i.e.}
+      de régulièrement tester le code écrit de manière interprétée.
+      Par contre, le fait de permettre ne devrait pas nuire aux
+      performances du système, surtout si on désire que ce système
+      soit compilé (et donc exécuté rapidement).
+
+    \subsubsection{Portabilité relative}
+      Finalement, il serait pertinant que système soit écrit de
+      manière portable afin qu'il puisse être utilisé dans plusieurs
+      implantation de Scheme. 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \subsection{Interface de Programmation (\texttt{API})}
+    Cette section contient un aperçu du système d'objet implanté, et
+    décrit brièvement son utilisation.
+  
+    \subsubsection{Création de Classes et d'Objets}
+      
+
+
+
+\clearpage
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Implantation}
+
+\subsubsection{Classes et Objets}
+
+\subsubsection{Méthodes Génériques}
+
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Résultats}
+
+%%   \begin{figure}[htbp!]
+%%     \begin{lstlisting}
+%% (let ((x (if j (cons 1 2) (cons 3 4))))
+%%   (let ((y (##pair? x)))
+%%     y))
+%%     \end{lstlisting}
+%%     \caption{Code source illustrant le \og constant folding \fg de la
+%%       fonction \texttt{pair?}.}
+%%     \label{ex3-source1}
+%%   \end{figure}
+
+
+\clearpage
+
+ 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Limitations}
+
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Conclusion}
+
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\addcontentsline{toc}{section}{R\'ef\'erences}
+\bibliographystyle{abbrv}
+\bibliography{bibliography}
+
+
+
+\end{document}
