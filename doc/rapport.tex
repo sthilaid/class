@@ -133,9 +133,55 @@ expressive de Scheme.
     décrit brièvement son utilisation.
   
     \subsubsection{Création de Classes et d'Objets}
+      La forme spéciale \texttt{define-class} permet de déclarer une
+      nouvelle classe (ou d'en redéfinir une existante). Cette forme
+      spéciale possède grossièrement la forme suivante:
+
+      \begin{lstlisting}
+(define-method class-name (supers) slots...)
+      \end{lstlisting}
+
+      où \texttt{class-name} est le nom de la class définie,
+      \texttt{supers} est une liste des super-classes de la classes
+      définie et \texttt{slots...} sera des définitions des champs de
+      l'objets.
+
+      Les champs peuvent être soient présents dans chaque instances
+      (obtenu par \texttt{(slot: nom)} ou commun à toutes les
+      instances (obtenu par \texttt{(class-slot: nom)}. De plus, il
+      existe des options pour les champs:
       
+      \begin{itemize}
+      \item[\texttt{read-hook:}] Permet de passer en paramètre
+        plusieurs fonctions qui seront appellées avant chaque lecture
+        du champs.
+      \item[\texttt{write-hook:}] Permet de passer en paramètre
+        plusieurs fonctions qui seront appellées avant chaque écriture
+        du champs.
+      \end{itemize}
 
+      Lorsque ces options sont activées pour des champs d'instances,
+      les fonctions doivent avoir une signature comme:
+      \texttt{(lambda(obj val) ...)}, sinon si le champs est une
+      champs de classe, la signature des fonctions devraient
+      ressembler à: \texttt{(lambda(val)...)}.
 
+      Un exemple (figure \ref{ex-defclass}) illustre de manière
+      général la définition de classes.
+
+      \begin{figure}[htbp!]
+        \begin{lstlisting}
+(define-class A () 
+  (slot: a (read-hooks: (lambda (o v) (pp v)))))
+(define-class B () 
+  (slot: b (write-hooks: (lambda (o new-v) (pp new-v)))))
+(define-class C (A B) (class-slot: c))
+        \end{lstlisting}
+        \caption{Exemple de définition de class}
+        \label{ex-defclass}
+      \end{figure}
+
+      Une déclaraiton de....
 
 \clearpage
 
