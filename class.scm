@@ -270,6 +270,10 @@
   (define obj (gensym 'obj))
   (define val (gensym 'val))
 
+  (define (show . args)
+    (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+  (define-macro (to-string e1 . es)
+    `(with-output-to-string "" (lambda () ,e1 ,@es)))
   ;; todo
   ;; puts the fields into the temp table. The class fields MUST be
   ;; processed AFTER that the super class's fields where processed.
@@ -501,6 +505,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (define-generic signature)
+  (define (show . args)
+    (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+  (define-macro (to-string e1 . es)
+    `(with-output-to-string "" (lambda () ,e1 ,@es)))
   (define name (meth-name signature))
   (define (parse-arg arg)
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
@@ -530,6 +538,10 @@
 
 
 (define-macro (define-method signature bod . bods)
+  (define (show . args)
+    (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+  (define-macro (to-string e1 . es)
+    `(with-output-to-string "" (lambda () ,e1 ,@es)))
   (define (name) (meth-name signature))
   (define unknown-meth-error 'unknown-meth)
   (define (parse-arg arg)
