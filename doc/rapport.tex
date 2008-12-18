@@ -86,7 +86,7 @@ expressive de Scheme.
       diminuer l'impacte du coût de l'utilisaiton d'un système
       d'objets.
 
-    \subsection{Rapidité de choix d'instances de méthode générique}
+    \subsection{Rapidité de choix d'instances de fonction générique}
       De manière similaire à la contrainte reliée à l'accès aux
       champs, notre système objets doit permettre d'obtenir rapidement
       l'instance correspondant à un appel de fonction générique. Cette
@@ -233,10 +233,126 @@ expressive de Scheme.
         \texttt{(pp (describe obj))}.
       \end{itemize}
 
-    \subsection{Déclaration et Instanciation de Méthodes Génériques}
+    \subsection{Déclaration et Instanciation de Fonctions Génériques}
+
+      \subsubsection{Déclarations de fonctions génériques}
+        La déclaration de fonctions génériques se fait par l'utilisation
+        de la forme spéciale suivante:
+
+      \begin{lstlisting}
+(define-generic (fname arg1 arg2 ...))
+      \end{lstlisting}
+
+        Cette déclaration indique donc la présence d'une nouvelle
+        fonction générique avec son arité (et le nom de chacun de ses
+        paramètres).
+
+        Par la suite, les instances des fonctions génériques peuvent
+        être déclarées par la forme spéciale:
+
+      \begin{lstlisting}
+(define-method (fname (arg1 arg1-type) arg2))
+      \end{lstlisting}
+
+        où l'on peut optionnelement spécifier le type (symbole
+        correspondant au nom de la classe) de l'argument
+        passé. Lorsqu'aucune indication de type n'est donnée, le type
+        par défaut aux données Scheme (\texttt{any-type}) est
+        attribué.
 
       \subsubsection{Relation d'ordre sur les classes}
-        \label{rel-ordre}
+        Les fonctions génériques de notre système implante un
+        polymorphisme plus simple que celui disponible avec un système
+        aussi puissant que CLOS. Entre autre, nos fonctions génériques
+        ne permettent pas d'utiliser des appels à d'autres instances
+        comme \texttt{call-next-method}.
+
+        Ainsi, lors de l'appel, l'instance de la fonction générique la
+        \og meilleure \fg sera utilisée. Afin de trouver quelle
+        instance est la meilleure pour des arguments de types donnés,
+        une heuristique très simple est utilisée: ce sera l'instance
+        qui devra avoir des paramètres tous super-types des paramètres
+        actuels et dont la somme pour chaque argument formels des
+        nombres de super classes sera la plus grande. Cette
+        heuristique est utilisée pour sa simplicité et parce qu'elle
+        semble donner un comportement prédictible, mais c'est le
+        résultat d'un choix assez arbitraire.
+
+      \subsubsection{Invoquation d'instances}
+
+        Comme mentionné, la meilleure instance de la fonction
+        générique appellé, selon des arguments donnés, sera appellée
+        lors d'une invoquation. Bien sûr, les fonction génériques
+        effectuent du \og dispatch \fg multiple, et donc elles ne sont
+        pas limitées à un seul argument (figure \ref{ex-multdisp}).
+
+        \begin{figure}[h!]
+          \begin{lstlisting}
+> (define-generic (f (x A) y (z A) zz))
+> (define-method (f (x A) y (z A) zz)
+    (+ (A-a x) y (A-a z) (string->number zz)))
+> (define-method (f (x A) y z zz)
+    (+ (A-a x) y z zz))
+> (f (make-A 1) 2 (make-A 3) "4")
+10
+> (f (make-A 1) 2 3 4)
+10
+          \end{lstlisting}
+          \caption{Exemple d'invoquation d'une fonction générique et
+            du \og dispatch \fg multiple en résultant.}
+          \label{ex-multdisp}
+        \end{figure}
+        
+        Par contre, il est aussi possible d'invoquer une instance
+        particulière d'une fonction générique en utilisant un \og cast
+        \fg. Dans l'exemple illustré dans la figure \ref{ex-cast},
+
+        \begin{figure}[h!]
+          \begin{lstlisting}
+> (define-class A () (slot: a))
+> (define-class B (A) (slot: b))
+> (define-class C (B) (slot: c))
+> (define-generic (f x))
+> (define-method (f (x A)) (A-a x))
+> (define-method (f (x B)) (B-b x))
+> (f (make-C 1 2 3))
+2
+> (f (cast (make-C 1 2 3) 'A))
+1
+          \end{lstlisting}
+          \caption{Exemple illustrant l'utilisation du \og cast \fg
+            disponible appeller une instance spécifique d'une fonction
+            générique.}
+          \label{ex-cast}
+        \end{figure}
+
+      \subsubsection{Modes d'utilisations}
+
+        Deux modes de programmations sont définis pour le système
+        objet, tout particulièrement pour l'utilisation des fonctions
+        génériques. Le premier mode, le mode itératif (par défaut),
+        permet de définir et d'invoquer directement les nouvelles
+        instances, comme illustré dans les figure \ref{ex-cast} et
+        figure \ref{ex-multdisp}. Ce mode est très utile pour du
+        développement intéractif, comme c'est souvent le cas en
+        Scheme. 
+
+        Un second mode est aussi disponible, le mode manuel, qui
+        permettrait d'installer les instances de fonctions génériques,
+        sur demande, et non pas après chaque définitions de nouvelles
+        instances. Ce mode devient innévitable lorsqu'on compile du
+        code utilisant le système.
+
+        On peut donc choisir le mode désiré en utilisant les formes
+        spéciales:
+
+        \begin{lstlisting}
+(set-iterative-method-developpement!) ; par défaut
+(set-manual-method-developpement!)
+        \end{lstlisting}
+
+        Il est fortement de recommandé de choisir le mode
+        immédiatement après l'inclusion du système objet.
 
     \subsection{Outils additionnels disponibles à l'exécution}
 
@@ -249,25 +365,13 @@ expressive de Scheme.
 
 \subsection{Classes et Objets}
 
-\subsection{Méthodes Génériques}
+\subsection{Fonctions Génériques}
 
 
 \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Résultats}
-
-%%   \begin{figure}[htbp!]
-%%     \begin{lstlisting}
-%% (let ((x (if j (cons 1 2) (cons 3 4))))
-%%   (let ((y (##pair? x)))
-%%     y))
-%%     \end{lstlisting}
-%%     \caption{Code source illustrant le \og constant folding \fg de la
-%%       fonction \texttt{pair?}.}
-%%     \label{ex3-source1}
-%%   \end{figure}
-
 
 \clearpage
 
