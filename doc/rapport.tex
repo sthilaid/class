@@ -1,4 +1,4 @@
-\documentclass[letterpaper,12pt]{article}
+\documentclass[letterpaper,12pt]{book}
 \usepackage[utf8]{inputenc}
 \usepackage{graphicx, subfigure}
 \usepackage{longtable}
@@ -35,10 +35,10 @@
 
 \clearpage
 
-\section{Systèmes d'objets}
+\chapter{Systèmes d'objets}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Introduction}
+\section{Introduction}
 
 Les languages de programmations se distinguent par différents concepts
 ou caractéristiques qui leurs sont propres. Le language Scheme est
@@ -71,13 +71,13 @@ expressive de Scheme.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-  \subsection{Besoins et Contraintes}
+  \section{Besoins et Contraintes}
     Le système de programmation orienté objet conçu respecte plusieurs
     contraintes dans le but de répondre à des besoins
     correspondant. Ces contraintes sont donc indiquées dans cette
     section en ordre d'importance.
 
-    \subsubsection{Rapidité d'accès aux champs}
+    \subsection{Rapidité d'accès aux champs}
       Cette contrainte est la plus importante pour notre implantation
       du système objet. En effet, les accès aux champs des objets sont
       des opérations extrêmement fréquentes et donc, afin d'avoir un
@@ -86,7 +86,7 @@ expressive de Scheme.
       diminuer l'impacte du coût de l'utilisaiton d'un système
       d'objets.
 
-    \subsubsection{Rapidité de choix d'instances de méthode générique}
+    \subsection{Rapidité de choix d'instances de méthode générique}
       De manière similaire à la contrainte reliée à l'accès aux
       champs, notre système objets doit permettre d'obtenir rapidement
       l'instance correspondant à un appel de fonction générique. Cette
@@ -94,13 +94,13 @@ expressive de Scheme.
       dynamiquement quelle serait la meilleure instance d'une fonction
       générique pour les types des objets passés en paramètres.
 
-    \subsubsection{Modularité}
+    \subsection{Modularité}
       Le système doit être facile à intégrer à une application écrite
       en Scheme. Donc elle devrait pouvoir être incluse comme toute
       librairie et ne pas être intégrée directement dans une
       implantation de Scheme, pour faciliter l'utilisation.
 
-    \subsubsection{Interface à la CLOS}
+    \subsection{Interface à la CLOS}
       Le système d'objet devrait avoir une interface similaire à celle
       fournie par le système objets du language Common
       Lisp~\cite{COMMONLISP} (Common Lisp Object System, ou encore
@@ -111,7 +111,7 @@ expressive de Scheme.
       concepts similaires à ceux qui sont déjà bien connu chez CLOS,
       afin d'augmenter l'accessibilité du système.
     
-    \subsubsection{Développement intéractif}
+    \subsection{Développement intéractif}
       Il serait intéressant que le système permette de pouvoir faire
       du développement itératif (de manière interactive avec un REPL)
       de manière à ce que le système soit cohérent avec la philosophie
@@ -121,18 +121,18 @@ expressive de Scheme.
       performances du système, surtout si on désire que ce système
       soit compilé (et donc exécuté rapidement).
 
-    \subsubsection{Portabilité relative}
+    \subsection{Portabilité relative}
       Finalement, il serait pertinant que système soit écrit de
       manière portable afin qu'il puisse être utilisé dans plusieurs
       implantation de Scheme. 
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  \subsection{Interface de Programmation (\texttt{API})}
+  \section{Interface de Programmation (\texttt{API})}
     Cette section contient un aperçu du système d'objet implanté, et
     décrit brièvement son utilisation.
   
-    \subsubsection{Création de Classes et d'Objets}
+    \subsection{Création de Classes et d'Objets}
       La forme spéciale \texttt{define-class} permet de déclarer une
       nouvelle classe (ou d'en redéfinir une existante). Cette forme
       spéciale possède grossièrement la forme suivante:
@@ -181,24 +181,81 @@ expressive de Scheme.
         \label{ex-defclass}
       \end{figure}
 
-      Une déclaraiton de....
+      Une déclaraiton de classe résulte en la création de plusieurs
+      fonctions utilitaires. Par exemple pour une définition comme
+      \begin{lstlisting}
+(define-class A () (slot: a) (class-slot: b))}
+      \end{lstlisting}
+      on obtiendrait:
+
+      \begin{itemize}
+      \item[\texttt{(make-A a)}:] Fonction de création d'une instance
+        de la classe \texttt{A}. Prend en paramètre les valeurs des
+        champs d'instances, en commençant par les champs hérités, dans
+        l'ordre (récursif) donné des super classes, tel qu'illustré
+        dans la figure \ref{ex-make-instance}.
+        \begin{figure}[h!]
+          \begin{lstlisting}
+(define-class A ()   (slot: a))
+(define-class B (A)  (slot: b))
+(define-class C ()   (slot: c))
+(define-class D (A C) (slot: d))
+(make-D a b c d)
+          \end{lstlisting}
+          \caption{Exemple illustrant l'ordre des paramètre dans un
+            constructeur d'instances.}
+          \label{ex-make-instance}
+        \end{figure}
+      \item[]
+
+      \item[\texttt{(A? obj)}:] Prédicat qui test si l'objet passé en
+        paramètre est une instance ou une sous-classe de \texttt{A}.
+      \item[]
+
+      \item[\texttt{(A-a obj)}:] Accès au champs d'instance \texttt{a}
+        de l'objet passé en paramètre.
+      \item[]
+
+      \item[\texttt{(A-a-set! obj new-a)}:] Modification du champs
+        d'instance \texttt{a} de l'objet passé en paramètre.
+      \item[]
+
+      \item[\texttt{(A-b)}:] Accès au champs statique \texttt{b}.
+      \item[]
+
+      \item[\texttt{(A-b-set! new-b)}:] Modificationdu champs
+        statique \texttt{b}.
+      \item[]
+
+      \item[\texttt{(describe obj)}:] Instance de fonction générique
+        qui retourne une liste décrivant le contenu de
+        l'instance. Utilise pour visualiser le contenu avec
+        \texttt{(pp (describe obj))}.
+      \end{itemize}
+
+    \subsection{Déclaration et Instanciation de Méthodes Génériques}
+
+      \subsubsection{Relation d'ordre sur les classes}
+        \label{rel-ordre}
+
+    \subsection{Outils additionnels disponibles à l'exécution}
 
 \clearpage
 
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Implantation}
+\section{Implantation}
 
-\subsubsection{Classes et Objets}
+\subsection{Classes et Objets}
 
-\subsubsection{Méthodes Génériques}
+\subsection{Méthodes Génériques}
 
 
 \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Résultats}
+\section{Résultats}
 
 %%   \begin{figure}[htbp!]
 %%     \begin{lstlisting}
@@ -216,13 +273,13 @@ expressive de Scheme.
 
  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Limitations}
+\section{Limitations}
 
 
 \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{Conclusion}
+\section{Conclusion}
 
 
 \clearpage
