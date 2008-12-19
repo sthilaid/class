@@ -283,7 +283,8 @@
            (>= (length field) 2))
       (let ((slot-type (case (car field)
                          ((slot: class-slot:) (car field))
-                         (else (error "Bad slot type!"))))
+                         (else (error (to-string (show "Bad slot type: "
+                                                       (car field)))))))
             (slot-name (cadr field))
             (slot-options (cddr field)))
         ;; If a field is already provided by a super class
@@ -293,7 +294,9 @@
                         slot-name
                         (make-slot slot-type
                                    (next-desc-index)
-                                   slot-options)))))))
+                                   slot-options)))))
+     (else (error (to-string (show "ill-formed slot declaration: "
+                                   field))))))
 
   (define (gen-accessors field-indices)
     (define (gen-accessor field slot-info)
@@ -477,11 +480,8 @@
    supers)
 
   ;; Process this class's slots
-  (for-each (lambda (field)
-              ;; If a field is already provided by a super class
-              ;; then the super class's is used ...
-              (process-field! field))
-            fields)
+  (for-each process-field! fields)
+
   (let* ((field-indices (sort-field-indices (table->list temp-field-table)))
          (class-desc (gen-descriptor field-indices)))
 
