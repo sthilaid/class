@@ -564,6 +564,7 @@
      (if (eq? e unknown-meth-error)
          (error (to-string (show "Generic method was not defined: " (name))))
          (raise e)))
+   ;; TODO: Add arity verification
    (lambda ()
      (cond
       ((table-ref meth-table (name) #f) =>

@@ -263,6 +263,7 @@ expressive de Scheme.
         attribué.
 
       \subsubsection{Relation d'ordre sur les classes}
+        \label{class-order-rel}
         Les fonctions génériques de notre système implante un
         polymorphisme plus simple que celui disponible avec un système
         aussi puissant que CLOS. Entre autre, nos fonctions génériques
@@ -455,6 +456,8 @@ expressive de Scheme.
     \item Génération de code
     \end{enumerate}
 
+
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     \subsubsection{Traitement des champs hérités des super classes}
    
       Afin d'obtenir les champs hérités des super classes, les super
@@ -576,9 +579,202 @@ expressive de Scheme.
       pointeur vers le descripteur de classe est aussi placé dans une
       table de hachage (similaire à celle présente lors de l'expansion
       macro) afin de permettre plus de flexibilité.
-  
-  \subsection{Fonctions Génériques}
 
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+  \subsection{Fonctions Génériques}
+    L'implantation utilisée pour les fonctions générique est très
+    simple, ce qui, nous croyons, assure de bonnes performances. De
+    manière globale, les déclarations ne font que stocker des
+    informations disponible durant l'expansion macro. Ensuite, il
+    faudra appeller la forme spéciale
+    \texttt{setup-generic-functions!} qui s'occupera de tout mettre en
+    place correctement. Nous croyons que c'est une approche très
+    simple parce qu'ainsi, lorsque \texttt{setup-generic-functions!}
+    est appellée, nous savons avoir toute l'information disponible
+    afin de générer le polymorphisme. Par contre, sinon après chaque
+    déclaration de nouvelle instance de fonction générique, il est
+    possible que le polymorphisme trouvé précédemment ne soit plus
+    valide.
+
+    Ainsi, il en résulte le besoin de créer les 2 modes d'utilisation
+    du système de fonctions générique suggérés dans la section portant
+    sur l'api: le mode interactif et le mode manuel. Dans le mode
+    interactif, le polymorphisme est re-généré après \emph{chaque}
+    déclaration de nouvelle instances de fonction générique. Ceci est
+    très problématique lorsqu'on compile le code puisuqe comme décrit
+    plus bas, le génération du polymorphisme est très coûteuse non
+    seulement en calcul mais aussi en taille de code. Et donc, il en
+    résulte en une explosion de la taille des exécutable lorsque le
+    programme est compilé en mode itératif. Par contre, avec le mode
+    manuel, il est possible de ne générer qu'une seule fois le
+    polymorphisme, lorsque le programmeur saît que toutes les
+    instances ont été déclarées et obtenir une taille de code
+    acceptable.
+
+    Nous allons maintenant donner plus de détails sur notre
+    implantation des fonctions génériques.
+
+    \subsubsection{Déclaration de fonctions génériques}
+      La déclaration est extrêmement simple. Lorsque la macro
+      \texttt{define-generic} est appellée, l'information sur le noms
+      des paramètres et le nom de la fonction sont conservés dans une
+      table de fonctions générique globale (\texttt{meth-table})
+      existant durant l'expansion macro. La figure \ref{defgen}
+      illustre le travail effectué lors de la déclaration d'une
+      fonction générique.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(define-macro (define-generic signature)
+  (define name (meth-name signature))
+  (define (parse-arg arg) ...)
+  (define (args) (map parse-arg (cdr signature)))
+  (table-set! meth-table name 
+               (make-generic-function name (args)))
+  ''ok)
+        \end{lstlisting}
+        \caption{Implantation de la déclaration de fonctions
+          génériques}
+        \label{defgen}
+      \end{figure}
+    
+    \subsubsection{Déclaration d'instances de fonctions génériques}
+      Le travail effectué pour la déclaration d'instance est aussi for
+      simple. Il ne suffi qu'a analyser la signature de l'instance
+      donnée afin d'en extraire le type de ses paramètre, et d'ajouter
+      une représentation abstraite de la méthode dans la structure
+      associée à la fonction générique existant durant l'expansion de
+      macro. La figure \ref{defmeth} illustre grossièrement le travail
+      effectué.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(define-macro (define-method signature bod . bods)
+  (define (parse-arg arg) ...)
+  (define (parse-args args) (map-values parse-arg args))
+  (with-exception-catcher
+   (lambda (e) ...)
+   (lambda ()
+     (cond
+      ((table-ref meth-table (name) #f) =>
+       (lambda (gen-fun)
+         (receive (args types) (parse-args (cdr signature))
+           (generic-function-instances-add!
+             gen-fun
+             (make-method (name) types
+                `(lambda ,args ,bod ,@bods)))
+           (case mode
+                  ((iterative) '(setup-generic-functions!))
+                  ((manual)    ''ok)
+                  (else        (error ...))))))
+      (else (raise unknown-meth-error))))))
+        \end{lstlisting}
+        \caption{Implantation des déclarations d'instancse de
+          fonctions génériques}
+        \label{defmeth}
+      \end{figure}
+
+    \subsubsection{Génération du polymorphisme}
+      Finalement, lorsque le moment est opportun, il faut mettre en
+      place les instances de fonctions génériques accumulées durant
+      l'expansion macro. La génération de code ce distingue en 3 étapes:
+
+      \begin{enumerate}
+      \item Mise en place des structures qui acceuilleront les
+        fonctions génériques.
+      \item Insertion des instances de fonctions génériques déclarées
+        dans l'endroit correspondant aux types de cet instance.
+      \item En utilisant le produit cartésien de tous les types
+        (classes), insérer les instances les plus appropriées et ce
+        pour chaque fonctions générique.
+      \end{enumerate}
+
+      Pour la première étape, les structures de données décrite dans
+      la section \ref{genfun-struct} seront initialisées. De plus, des
+      méta-fonctions génériques pour chaque déclarations seront
+      installées. Le but de celles-ci est de faire le \og dispatch \fg
+      durant l'exécution vers la bonne instance de la fonction
+      générique. Du code correspondant à l'expansion de la
+      méta-fonction pour une fonction générique \texttt{f} est
+      illustré dans la figure \ref{meta-genfun}.
+      
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (##decompile f)
+(lambda (x)
+  (let ((types (map get-class-id (list x))))
+    (cond ((table-ref f-meth-table types #f)
+            => (lambda (method) 
+                 (apply method (map uncast (list x)))))
+           (else (error "Unknown method")))))
+        \end{lstlisting}
+        \caption{Expansion de la méta-fonction pour une fonction
+          générique \texttt{f}}
+        \label{meta-genfun}
+      \end{figure}
+      
+      Pour la deuxième étape, chacune des instances déclarées seront
+      directement insérées pour les types spécifiés, dans la strucutre
+      de la fonction générique. Par exemple, la figure
+      \ref{ex-insertion-directe-meth} illustre une insertion directe
+      d'une instance déclarée de la fonction générique \texttt{f}
+      ayant comme paramètre la variable \texttt{x} de type \texttt{D}.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(table-set! f-meth-table '(D) (lambda (x) (D-inst x)))
+        \end{lstlisting}
+        \caption{Insertion directe d'une instance de la fonction
+          générique \texttt{f} pour un paramètre \texttt{x} de type
+          \texttt{D}.}
+        \label{ex-insertion-directe-meth}
+      \end{figure}
+
+      Finalement, il ne reste plus qu'a \og remplir les trous \fg,
+      \textit{i.e.} de générer le polymorphisme en ajoutant pour
+      toutes les combinaisons de types de paramètres pour une fonction
+      générique donnée l'instance la meilleure (la plus spécialisée).
+
+      Pour ce faire, nous implantons l'algorithme \ref{algo-poly}. Cet
+      algorithme possède beaucoup de \og magie noire \fg afin de faire
+      fonctionner le polymorphisme, mais le résultat est concluant. En
+      résumé, on va placer l'instance la plus appropriée pour un
+      tuples de types appartenant au produit cartésiens de toutes les
+      possibilités de sous-types existante pour cette intance. Afin de
+      faire le triage, ou l'ordonnancement pour trouver l'instance la
+      plus spécifique, on utilise la même idée que celle décrite dans
+      la section \ref{class-order-rel} traitant sur l'ordre relatif
+      entre les classes. La listre triée de l'instnace la plus
+      spécifique à la moins spécifique est renversée de manière à ce
+      que l'insertion la plus spécifique soit en \emph{dernier} et
+      donc soit effective. Il en résulte donc que non seulement
+      l'algorithme est terriblement inneficace, mais aussi qu'il
+      génère beaucoup de code inutile.
+
+      Par contre, nous croyons que ce soit acceptable dans la mesure
+      où la génération du polymorphisme n'est pas appellée
+      souvent. Dans le mode manuel, elle devrait être invoquée une
+      seule fois. Dans le mode interactif, elle sera invoquée après
+      chaque déclaration d'instance, mais puisque l'utilisateur sera
+      typiquement dans une \og REPL \fg, le calcul et code généré
+      superflu ne sera pas visible. 
+
+      \begin{algorithm}
+        \caption{Algorithme de génération de polymorphisme}
+        \label{algo-poly}
+        \begin{algorithmic}
+        \FORALL{$g \in$ declared generic function which has instances}
+          \FORALL{$m \in $ reverse sorted methods of $g$}
+            \FORALL{$types \in$ possible valid argument types of $m$}
+              \STATE (table-set! $g$-method-table $types$ $m$)
+            \ENDFOR
+          \ENDFOR
+        \ENDFOR
+        \end{algorithmic}
+      \end{algorithm}
+      
+
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   \subsection{Structures de données à l'exécution}
     Les structures de données utilisées pour implanter les classes,
     fonctions génériques et instances de ces deux derniers à
@@ -710,26 +906,57 @@ object-system-loaded
       \end{figure}
 
     \subsubsection{Structure des fonction génériques et de leurs instances}
-    
+      \label{genfun-struct}
+      Pour chacune des fonctions génériques déclarées, une variable
+      globale correspondant à cette fonction générique pointera vers
+      une table de hachage. Cette table sera populée par chacune des
+      instances de cette fonction générique. Une liste des types de
+      chaque argument d'une instance sera utilisée comme clée et la
+      valeur correspondra à la fermeture associée.
+
+      Ainsi, lorsque la fonction générique sera appellée via une
+      méta-fonction, une recherche dans la table sera effectuée et si
+      une instance est trouvée selon le type des arguments actuels
+      utilisés, alors cette fermeture sera appellée avec ces arguments
     
 
 \clearpage
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Résultats}
-
-\clearpage
 
  
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Limitations}
+  L'implantation du système orienté objet présenté comporte plusieurs
+  limitations quand à son utilisaiton. La principale limitation serait
+  certainement reliée au fait que le système ne fonctionne pas de
+  manière inter-module. Donc il n'est pas possible d'utiliser des
+  classes déclarées dans un autre fichier. Nous croyons toutefois
+  qu'il serait difficile d'ajouter une telle fonctionnalité à notre
+  système sans ajouté un coût considérable pour l'accès aux champs
+  d'instances.
 
+  Aussi, le système est peu adapté à des changements dans son
+  fonctionnement. En effet, afin d'ajouter des nouvelles
+  fonctionnalitées au système, il faut plonger dans et modifier une
+  grande partie du code. Ainsi, l'ajout de protocole de méta-objets
+  tel que décrit dans \textit{The Art Of The MetaObject
+    Protocol}~\cite{AOMOP} serait un grand atout pour le système. Non
+  seulement, l'introspection serait beaucoup plus aisée, mais aussi la
+  modification du système pourrait se faire de manière très modulaire.
+
+  
 
 \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Conclusion}
+  ...
 
+  Nous avons donc, grâce à l'aide d'un algorithme très naif, réussi à
+  faire un fonctionner un système implantant un polymorphisme sur un
+  système de classe à héritage multiple.
+
+  ...
 
 \clearpage
 
