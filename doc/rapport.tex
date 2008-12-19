@@ -129,6 +129,8 @@ expressive de Scheme.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   \section{Interface de Programmation (\texttt{API})}
+    \label{api}
+
     Cette section contient un aperçu du système d'objet implanté, et
     décrit brièvement son utilisation.
   
@@ -347,7 +349,7 @@ expressive de Scheme.
         spéciales:
 
         \begin{lstlisting}
-(set-iterative-method-developpement!) ; par défaut
+(set-iterative-method-developpement!) ; par defaut
 (set-manual-method-developpement!)
         \end{lstlisting}
 
@@ -356,6 +358,72 @@ expressive de Scheme.
 
     \subsection{Outils additionnels disponibles à l'exécution}
 
+      Plusieurs fonctionnalités sont displonible durant l'éxécution du
+      système d'objets afin de rendre plus agréable son
+      utilisation. Les fonctions principales sont:
+
+      \begin{itemize}
+      \item[\texttt{(find-class 'class-name)}:] Permet d'obtenir le
+        descripteur de classe de la classe nommée
+        \texttt{class-name}, si elle existe.
+      \item[]
+      \item[\texttt{(class-desc-id class-descriptor)}:] Retourne le
+        nom de la classe passée en paramètre.
+      \item[]
+      \item[\texttt{(class-desc-supers class-descriptor)}:] Retourne
+        la liste des super classes directes de la classe donnée.
+      \item[]
+      \item[\texttt{(object? obj)}:] Prédicat vérifiant si l'objet
+        donnée est une instance d'une classe du système.
+      \item[]
+      \item[\texttt{(get-class-id obj)}:] Retourne le nom symbolique
+        de la classe de l'objet donnée. Si l'objet n'est pas une
+        instance, alors \texttt{'any-type} est retourné.
+      \item[]
+      \item[\texttt{(instance-of? obj 'class-name)}:] Vérifie de
+        manière efficace si l'objet est une instance directe de la
+        classe associée au symbol donné.
+      \item[]
+      \item[\texttt{(object-light-copy obj)}:] Créé une copie légère
+        de l'instance passée en paramètre. Une copy légère créé une
+        nouvelle instance, ne fais que copier les pointeurs contenu
+        dans l'instance.
+      \end{itemize}
+
+      Aussi, une forme spéciale (\texttt{update!}) est disponible pour
+      faire une mise-à-jour incrémentale d'un champs d'instance. Une
+      mise-à-jour incrémentale survient lorsque qu'on modifie un
+      champs en fonction de sa valeur courante. La figure
+      \ref{ex-update-a} illustre un exemple typique de mise-à-jour
+      incrémentale et la figure \ref{ex-update-b} illustre un exemple
+      d'utilisation de la forme spéciale équivalent.
+
+      \begin{figure}[h!]
+          \begin{lstlisting}
+(define-class position () (slot: x) (slot: y))
+(let ((current-position (make-position 3 4)))
+    (position-x-set! current-position
+                     (+ (position-x current-position) 5)))
+          \end{lstlisting}
+          \caption{Exemple typique de mise-à-jour incrémentale}
+          \label{ex-update-a}
+      \end{figure}
+
+      \begin{figure}[h!]
+          \begin{lstlisting}
+(define-class position () (slot: x) (slot: y))
+(let ((current-position (make-position 3 4)))
+    (update! current-position position x (lambda (x) (+ x 5))))
+          \end{lstlisting}
+          \caption{Code équivalent utilisant la forme spéciale
+            \texttt{update!}}
+          \label{ex-update-b}
+      \end{figure}
+
+    Bien sûr, l'utilisation de cette macro n'est pas nécessaire, mais
+    permet souvent de faire de manière plus courte une mise-à-jour
+    incrémentale.
+
 \clearpage
 
 
@@ -363,10 +431,287 @@ expressive de Scheme.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Implantation}
 
-\subsection{Classes et Objets}
+  Dans cette section, l'implantation du système objets décrit dans la
+  section \ref{api} sera décrite. Ainsi, les structures de données et
+  algorithmes seront expliqués afin d'expliquer le fonctionnement du
+  système et les choix qui ont dû être fait afin de resepecter le
+  mieux possible les contraintes imposées initialement.
 
-\subsection{Fonctions Génériques}
+  \subsection{Classes et Objets}j
+    \label{classes&objets}
+    La forme spéciale de déclaration de classe (\texttt{define-class})
+    est implanté dans notre système comme une macro Scheme. Cette
+    macro prends les paramètre passés en entrés, soit le nom de la
+    classe, la liste des super classes et les champs de celle-ci et
+    effectue le traitement nécessaire afin de pouvoir générer le code
+    permettant d'obtenir le comportement décrit plus haut.
 
+    Le traitement nécessaire est relativement simple et se fait en 3
+    étapes:
+
+    \begin{enumerate}
+    \item Traitement des champs hérités des super classes
+    \item Traitement des champs directs de la classe
+    \item Génération de code
+    \end{enumerate}
+
+    \subsubsection{Traitement des champs hérités des super classes}
+   
+      Afin d'obtenir les champs hérités des super classes, les super
+      classes sont passées dans l'ordre spécifié par
+      l'utilisateur. Les champs de chaque super classes sont ajoutés à
+      une \og eq? table \fg utilisé temporairement
+      (\texttt{temp-field-table}). On vérifie aussi que les champs ne
+      sont pas héritées plus d'une fois, sinon on retourne une
+      erreur. Bien sûr, une vérification assure que toutes les classes
+      sont des classes valides du système. La figure
+      \ref{heritage-code} illustre ce traitement.
+   
+      \begin{figure}[h!]
+        \begin{lstlisting}
+  (for-each
+   (lambda (super)
+     (let ((super-field-indices
+            (cond
+             ((table-ref class-table super #f) =>
+              (lambda (desc) (class-info-fi desc)))
+             (else (error "Inexistant super class")))))
+       (for-each
+        (lambda (field-index)
+          (if (not (table-ref temp-field-table (car field-index) 
+                               #f))
+              (table-set! temp-field-table
+                          (car field-index) (cdr field-index))
+              (error "Field already defined")))
+        super-field-indices)))
+   supers)
+        \end{lstlisting}
+        \caption{Code effectuant le traitement des champs hérités}
+        \label{heritage-code}
+      \end{figure}
+      
+      Maintenant que les champs hérités sont en mains, il ne suffit que de
+      traiter les champs directs de la classe.
+
+    \subsubsection{Traitement des champs directs de la classe}
+      Par la suite, les champs directs de la classe sont traités. Le
+      traitement effectue le \og parsing \fg des champs en s'assurant
+      qu'ils sont bien formés. Par la suite, une verification assure
+      que le champs n'existe pas dans les champs hérités, si c'est le
+      cas, alors le champs hérité est utilisé.
+
+      Encore une fois, l'information sur les champs est ajouté dans la
+      \og eq? table \fg temporaire.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(define (process-field! field)
+  (cond
+   ((and (list? field)
+         (>= (length field) 2))
+    (let ((slot-type (case (car field)
+                         ((slot: class-slot:) (car field))
+                         (else (error "Bad slot type!"))))
+          (slot-name (cadr field))
+          (slot-options (cddr field)))
+      ;; If a field is already provided by a super class
+      ;; then the super class's is used ...
+      (if (not (table-ref temp-field-table slot-name #f))
+          (table-set! temp-field-table
+                      slot-name
+                      (make-slot slot-type
+                                 (next-desc-index)
+                                 slot-options)))))
+   (else "ill-formed slot declaration")))
+(for-each process-field! fields)
+        \end{lstlisting}
+        \caption{Code effectuant le traitement des champs hérités}
+        \label{heritage-code}
+      \end{figure}
+
+      Lorsque toute l'information sur les champs est en main, il est
+      maintenant possible d'effectuer la génération de code implantant
+      la création et manipulation d'instances de cette nouvelle classe.
+
+    \subsubsection{Génération de code}
+      En ce qui a attraît à la génération du code exécuté, le logique
+      est très simple. Elle se résume bien par le code effectuant le
+      travail (figure \ref{class-code-gen})
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+  (let* ((field-indices (sort-field-indices
+                             (table->list temp-field-table)))
+          (class-desc (gen-descriptor field-indices)))
+    (table-set! class-table name 
+                 (make-class-info field-indices class-desc))
+    `(begin ,@(gen-accessors field-indices)
+             ,@(gen-setters field-indices)
+             ,(gen-predicate)
+             ,(gen-instantiator field-indices)
+             ,(gen-printfun field-indices)
+             (table-set! ,(rt-class-table-name)
+                          ',name
+                          ,(class-desc-name name))))
+        \end{lstlisting}
+        \caption{Génération de code par un appel à \texttt{define-class}}
+        \label{class-code-gen}
+      \end{figure}
+
+      Ainsi, on constate que la table temporaire de champs est
+      transformée en structure de donnée qui sera conservée tout au
+      long de la phase d'expansion macro, via une table globale
+      contenant toutes les classes déclarées
+      (\texttt{class-table}). Par la suite, les fonctions nécessaires
+      sont générées à partir de ces données de manière à ce que
+      l'accès au champs ce fasse rapidement, mais sans utiliser trop
+      d'espace mémoire non plus. Plus de détails sur la structure des
+      instances et l'accès au champs sont donnés dans la section
+      \ref{inst-struct}.
+
+      Il est à noter que le code généré par \texttt{gen-instantiator}
+      créé une variable globale à l'exécution qui possèdera un
+      pointeur direct vers le descripteur de class. On peut ainsi
+      accèder très facilement aux champs de classes. Par contre, un
+      pointeur vers le descripteur de classe est aussi placé dans une
+      table de hachage (similaire à celle présente lors de l'expansion
+      macro) afin de permettre plus de flexibilité.
+  
+  \subsection{Fonctions Génériques}
+
+  \subsection{Structures de données à l'exécution}
+    Les structures de données utilisées pour implanter les classes,
+    fonctions génériques et instances de ces deux derniers à
+    l'exécution sont décrite dans cette section.
+  
+    \subsubsection{Descripteur de classes}
+      Les descripteurs de classes sont les objets représentant la méta
+      entité qu'est une classe. Le rôle que joue le descripteur dans
+      notre système est primordial, car c'est lui qui permet de dire
+      au fonctions accédant aux champs où retrouver ces derniers. On
+      peut résumé la structure d'un descripteur de classe par le
+      vecteur Scheme suivant:
+
+      \begin{lstlisting}
+#(nom-classe liste-supers . indexes)
+      \end{lstlisting}
+
+      Nous avons consciemment utilisé le point comme un abus de
+      notation dans ce vecteur afin de représenter que le reste du
+      vecteur correspond a des indices pour \emph{tout les champs de
+        toutes les classes}. Lorsque les champs sont ajoutés à un
+      descripteur de nouvelle classe, les nouveaux champs sont ajoutés
+      à la suite des champs précédemment existant dans toutes les
+      classes déjà déclarées. Ainsi, chaque champs possède un index
+      \emph{unique} dans les descripteurs de classes.
+
+      Ce choix résulte forcémment en de larges descripteurs de classes,
+      surtout lorsrqu'il y a beaucoup de classes ou des classes
+      possédant beaucoup de champs. Par contre, ceci permet d'avoir
+      toute la flexibilité désirée pour la création d'instances. 
+
+      Donc, dans le descripteur de classe, à l'index pré-déterminer pour
+      un champs donné, on y retrouvera l'index où se trouve ce champs en
+      question dans une instance de la classe. On pourra donc avoir des
+      instances de taille constante. Le coût de se choix résulte par
+      contre, en une indirection supplémentaire pour l'accès à un champs
+      (il faut aller chercher où se trouve le champs dans l'instance à
+      partir de l'information contenue dans le descripteur de classe).
+
+      Afin d'illustrer ce qui vient d'être énnoncé, l'exemple présenté
+      dans la figure \ref{ex-cdesc} illustre les descripteurs de classes
+      créés lorsque le système est \og frais \fg et qu'aucune autre
+      classe n'existe au préalable. On constate que par exemple, pour la
+      classe \texttt{C}, l'index d'instance du champs \texttt{zz} se
+      retrouve après trois \og trous \fg correspondant aux champs des
+      classes \texttt{A} et \texttt{B} et sa valeur d'index d'instance
+      est de 1.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (include "class.scm")
+object-system-loaded
+> (define-class A () (slot: a))
+> (find-class? 'A)
+#(A () 1)
+> (define-class B (A) (slot: b) (slot: c))
+> (find-class? 'B)
+#(B (A) 1 2 3)
+> (define-class C () (slot: zz))
+> (find-class? 'C)
+#(C () unknown-slot unknown-slot unknown-slot 1)
+        \end{lstlisting}
+        \caption{Exemple illustrant le comportement des descripteurs de
+          classes. Les descripteurs de classes grossissent de plus en
+          plus qu'il y a de classes déclarées.}
+        \label{ex-cdesc}
+      \end{figure}
+
+    \subsubsection{Structure des instances}
+      \label{inst-struct}
+      Les instances sont représentées de manière très simple. Il
+      s'agit d'un vecteur dont le premier champs est un pointeur vers
+      le descripteur de classe et les autres contiennent les champs
+      d'instances, dans l'ordre tel que décrit dans l'api (voir
+      section \ref{api}) ou dans le traitement déclarations de classes
+      (voir section \ref{classes&objets}). En reprenant les
+      déclarations de classes de la figure \ref{ex-cdesc}, la figure
+      \ref{ex-struct-inst} illustre la structure des instances de ces
+      classes \texttt{A}, \texttt{B} et \texttt{C}.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (make-A 'allo)
+#(#(A () 1) allo)
+> (make-B 'allo 'toto 'titi)
+#(#(B (A) 1 2 3) allo toto titi)
+> (make-C 'bonjour)
+#(#(C () unknown-slot unknown-slot unknown-slot 1) bonjour)
+        \end{lstlisting}
+        \caption{Illustration de la structure des instances de classes à
+          partir des définitions de classes données dans la figure
+          \ref{ex-cdesc}.}
+        \label{ex-struct-inst}
+      \end{figure}
+
+      Malgré le fait que les instances semblent d'augmenter de tailles
+      en fonction du nombres de classes précédemment définies, ce n'est
+      pas le cas puisqu'il ne s'agit que d'un pointeur vers le
+      descripteur de classe.
+
+      Ainsi, un accès à un champs se fait en temps constant ($\in
+      O(1)$). Il faut parcontre suivre deux indirections: une pour
+      obtenir le descripteur de classe et une seconde par le
+      descripteur de classe afin de savoir où se trouve le champs dans
+      l'instance. Par contre, l'accès aux champs de classes sont
+      directs puisque ceux-ci sont stockés directement dans le
+      descripteur de classe (où il y aurait normalement l'index
+      d'instance). Ce concept est illustré dans l'exemple
+      \ref{ex-slot-access}, où le code effectuant l'accès à des champs
+      d'instance et de classe est donnée pour une classe exemple.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (define-class D () (slot: inst) (class-slot: clas))
+> (find-class? 'D)
+#(D () 1 unbound-class-slot)
+> (##decompile D-inst)
+(lambda (#:obj1373) (vector-ref #:obj1373 
+                        (vector-ref (vector-ref #:obj1373 0) 2)))
+> (##decompile D-clas)
+(lambda () (vector-ref D-class-descriptor 3))
+> (D-clas-set! 'allo)
+> (find-class? 'D)
+#(D () 1 allo)
+        \end{lstlisting}
+        \caption{Illustration du code effectuant l'accès aux champs
+          d'instances et de classes.}
+        \label{ex-slot-access}
+      \end{figure}
+
+    \subsubsection{Structure des fonction génériques et de leurs instances}
+    
+    
 
 \clearpage
 
