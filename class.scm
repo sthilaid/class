@@ -96,6 +96,7 @@
       (define (class-info-desc info) (vector-ref info 1))
       
       (define (make-class-desc id supers num-fields)
+        ;; add 2 to include place holders for the id and supers
         (let ((desc (make-vector (+ num-fields 2) 'unknown-slot)))
           (vector-set! desc 0 id)
           (vector-set! desc 1 supers)
@@ -380,12 +381,16 @@
          (set! instance-index (+ instance-index 1))
          ,i))
     (let* ((instance-index 1)
-           (desc (make-class-desc name supers
-                                  (+ (if (pair? field-indices)
-                                         (slot-index
-                                          (cdar (take-right field-indices 1)))
-                                         0)
-                                     1))))
+           (desc (make-class-desc
+                  name supers
+                  (if (pair? field-indices)
+                      ;; must substract 1 here because the index
+                      ;; includes the clas id and supers' place
+                      ;; holders (but id has index 0)
+                      (- (slot-index
+                          (cdar (take-right field-indices 1)))
+                         1)
+                      0))))
       ;; For each field, insert the instance index if it is an
       ;; instance slot or, simply add an unbound notice for a class
       ;; slot into the descriptor
