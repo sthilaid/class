@@ -8,7 +8,7 @@
 (load "test.scm")
 (set-iterative-method-developpement!)
 
-
+(pp (lambda () (define-class A ()      (slot: a) (class-slot: csa))))
 (define-class A ()      (slot: a) (class-slot: csa))
 (define-class B (A)     (slot: b))
 (define-class C ()      (slot: c))
@@ -54,7 +54,6 @@
   'ok)
 
 (define-test simple-class-slots "1234" 'ok
-  (define-class A () (slot: a) )
   (let ((obj1 (make-A 1))
         (obj2 (make-A 2)))
     (A-csa-set! 3)
@@ -119,7 +118,7 @@
   (if (vector? (h (make-C 10) (make-C 11))) (display 'ok) (display 'no))
   'ok)
 
-(define-test test-instance-of "A#fAB#f#f#f#t#f#f" 'ok
+(define-test test-instance-of "A#fAB#t#f#f#t#f#f" 'ok
   (let ((a (make-A 1))
         (b (make-B 1 2)))
     (display (A? a))

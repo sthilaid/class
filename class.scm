@@ -161,9 +161,6 @@
 
 (define-macro (init-rt)
   `(begin
-;;      (include "scm-lib-macro.scm")
-;;      (include "scm-lib.scm")
-     
      (define (class-desc-id desc) (vector-ref desc 0))
      (define (class-desc-supers desc) (vector-ref desc 1))
      (define (class-desc-indices-vect desc) (vector-ref desc 2))
