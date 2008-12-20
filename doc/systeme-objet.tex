@@ -1,0 +1,983 @@
+
+
+\chapter{Systèmes d'objets}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+Les languages de programmations se distinguent par différents concepts
+ou caractéristiques qui leurs sont propres. Le language Scheme est
+caractérisé non seulement par son système de macro très évolué et par
+les foncitons de premières classes, mais aussi par sa
+\emph{simplicité}.
+
+En effet, Scheme est un language très minimaliste. Il fut conçu de
+manière à comprendre tous les outils nécessaire, afin d'en avoir aussi
+peu que possible, contrairement à Lisp où l'approche inverse est
+utilisée. Ainsi, pour programmer en Scheme des programmes non
+triviaux, plusieurs librairies auxiliaires doivent être généralement
+écrites. Par contre, puisque le language est très expressifs, ces
+librairies peuvent être écrites rapidement.
+
+Un module intéressant à ajouter au dessus de Scheme est un système
+orienté objet. En effet, un tel système permet la création et
+l'utilisation d'objets de manières très dynamique et expressive par,
+entre autre, l'utilisation du polymorphisme et de l'héritage.
+
+Nous proposons donc pour la troisième étape de notre projet d'écrire
+un système d'objets pouvant s'ajouter à Scheme pour d'une part,
+obtenir un module utile pour tout programmeur Scheme et, d'autre part,
+démontrer qu'il est possible d'écrire rapidement un système qui peut
+sembler très complexe à première vu en utilisant la puissance
+expressive de Scheme.
+
+\clearpage
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  \section{Besoins et Contraintes}
+    Le système de programmation orienté objet conçu respecte plusieurs
+    contraintes dans le but de répondre à des besoins
+    correspondant. Ces contraintes sont donc indiquées dans cette
+    section en ordre d'importance.
+
+    \subsubsection{Rapidité d'accès aux champs}
+      Cette contrainte est la plus importante pour notre implantation
+      du système objet. En effet, les accès aux champs des objets sont
+      des opérations extrêmement fréquentes et donc, afin d'avoir un
+      système utilisable à l'intérieur d'applications concrètes, ces
+      accès doivent se faire le plus rapidement possible afin de
+      diminuer l'impacte du coût de l'utilisaiton d'un système
+      d'objets.
+
+    \subsubsection{Rapidité de choix d'instances de fonction générique}
+      De manière similaire à la contrainte reliée à l'accès aux
+      champs, notre système objets doit permettre d'obtenir rapidement
+      l'instance correspondant à un appel de fonction générique. Cette
+      contrainte impose donc aux fonctions générique de ne pas évaluer
+      dynamiquement quelle serait la meilleure instance d'une fonction
+      générique pour les types des objets passés en paramètres.
+
+    \subsubsection{Modularité}
+      Le système doit être facile à intégrer à une application écrite
+      en Scheme. Donc elle devrait pouvoir être incluse comme toute
+      librairie et ne pas être intégrée directement dans une
+      implantation de Scheme, pour faciliter l'utilisation.
+
+    \subsubsection{Interface à la CLOS}
+      Le système d'objet devrait avoir une interface similaire à celle
+      fournie par le système objets du language Common
+      Lisp~\cite{COMMONLISP} (Common Lisp Object System, ou encore
+      CLOS). Puisque Scheme est une version épurée de Common Lisp et
+      puisque CLOS est déjà bien connu et à fait ses preuves en tant
+      qu'utilisabilité, il serait donc naturel qu'un système d'objets
+      pour Scheme respecte des conventions d'utilisations et des
+      concepts similaires à ceux qui sont déjà bien connu chez CLOS,
+      afin d'augmenter l'accessibilité du système.
+    
+    \subsubsection{Développement intéractif}
+      Il serait intéressant que le système permette de pouvoir faire
+      du développement itératif (de manière interactive avec un REPL)
+      de manière à ce que le système soit cohérent avec la philosophie
+      de développement généralement utilisée en Scheme, \textit{i.e.}
+      de régulièrement tester le code écrit de manière interprétée.
+      Par contre, le fait de permettre ne devrait pas nuire aux
+      performances du système, surtout si on désire que ce système
+      soit compilé (et donc exécuté rapidement).
+
+    \subsubsection{Portabilité relative}
+      Finalement, il serait pertinant que système soit écrit de
+      manière portable afin qu'il puisse être utilisé dans plusieurs
+      implantation de Scheme. 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \section{Interface de Programmation (\texttt{API})}
+    \label{api}
+
+    Cette section contient un aperçu du système d'objet implanté, et
+    décrit brièvement son utilisation.
+  
+    \subsection{Création de Classes et d'Objets}
+      La forme spéciale \texttt{define-class} permet de déclarer une
+      nouvelle classe (ou d'en redéfinir une existante). Cette forme
+      spéciale possède grossièrement la forme suivante:
+
+      \begin{lstlisting}
+(define-method class-name (supers) slots...)
+      \end{lstlisting}
+
+      où \texttt{class-name} est le nom de la class définie,
+      \texttt{supers} est une liste des super-classes de la classes
+      définie et \texttt{slots...} sera des définitions des champs de
+      l'objets.
+
+      Les champs peuvent être soient présents dans chaque instances
+      (obtenu par \texttt{(slot: nom)} ou commun à toutes les
+      instances (obtenu par \texttt{(class-slot: nom)}. De plus, il
+      existe des options pour les champs:
+      
+      \begin{itemize}
+      \item[\texttt{read-hook:}] Permet de passer en paramètre
+        plusieurs fonctions qui seront appellées avant chaque lecture
+        du champs.
+      \item[\texttt{write-hook:}] Permet de passer en paramètre
+        plusieurs fonctions qui seront appellées avant chaque écriture
+        du champs.
+      \end{itemize}
+
+      Lorsque ces options sont activées pour des champs d'instances,
+      les fonctions doivent avoir une signature comme:
+      \texttt{(lambda(obj val) ...)}, sinon si le champs est une
+      champs de classe, la signature des fonctions devraient
+      ressembler à: \texttt{(lambda(val)...)}.
+
+      Un exemple (figure \ref{ex-defclass}) illustre de manière
+      général la définition de classes.
+
+      \begin{figure}[htbp!]
+        \begin{lstlisting}
+(define-class A () 
+  (slot: a (read-hooks: (lambda (o v) (pp v)))))
+(define-class B () 
+  (slot: b (write-hooks: (lambda (o new-v) (pp new-v)))))
+(define-class C (A B) (class-slot: c))
+        \end{lstlisting}
+        \caption{Exemple de définition de class}
+        \label{ex-defclass}
+      \end{figure}
+
+      Une déclaraiton de classe résulte en la création de plusieurs
+      fonctions utilitaires. Par exemple pour une définition comme
+      \begin{lstlisting}
+(define-class A () (slot: a) (class-slot: b))}
+      \end{lstlisting}
+      on obtiendrait:
+
+      \begin{itemize}
+      \item[\texttt{(make-A a)}:] Fonction de création d'une instance
+        de la classe \texttt{A}. Prend en paramètre les valeurs des
+        champs d'instances, en commençant par les champs hérités, dans
+        l'ordre (récursif) donné des super classes, tel qu'illustré
+        dans la figure \ref{ex-make-instance}.
+        \begin{figure}[h!]
+          \begin{lstlisting}
+(define-class A ()   (slot: a))
+(define-class B (A)  (slot: b))
+(define-class C ()   (slot: c))
+(define-class D (A C) (slot: d))
+(make-D a b c d)
+          \end{lstlisting}
+          \caption{Exemple illustrant l'ordre des paramètre dans un
+            constructeur d'instances.}
+          \label{ex-make-instance}
+        \end{figure}
+      \item[]
+
+      \item[\texttt{(A? obj)}:] Prédicat qui test si l'objet passé en
+        paramètre est une instance ou une sous-classe de \texttt{A}.
+      \item[]
+
+      \item[\texttt{(A-a obj)}:] Accès au champs d'instance \texttt{a}
+        de l'objet passé en paramètre.
+      \item[]
+
+      \item[\texttt{(A-a-set! obj new-a)}:] Modification du champs
+        d'instance \texttt{a} de l'objet passé en paramètre.
+      \item[]
+
+      \item[\texttt{(A-b)}:] Accès au champs statique \texttt{b}.
+      \item[]
+
+      \item[\texttt{(A-b-set! new-b)}:] Modificationdu champs
+        statique \texttt{b}.
+      \item[]
+
+      \item[\texttt{(describe obj)}:] Instance de fonction générique
+        qui retourne une liste décrivant le contenu de
+        l'instance. Utilise pour visualiser le contenu avec
+        \texttt{(pp (describe obj))}.
+      \end{itemize}
+
+    \subsection{Déclaration et Instanciation de Fonctions Génériques}
+
+      \subsubsection{Déclarations de fonctions génériques}
+        La déclaration de fonctions génériques se fait par l'utilisation
+        de la forme spéciale suivante:
+
+      \begin{lstlisting}
+(define-generic (fname arg1 arg2 ...))
+      \end{lstlisting}
+
+        Cette déclaration indique donc la présence d'une nouvelle
+        fonction générique avec son arité (et le nom de chacun de ses
+        paramètres).
+
+        Par la suite, les instances des fonctions génériques peuvent
+        être déclarées par la forme spéciale:
+
+      \begin{lstlisting}
+(define-method (fname (arg1 arg1-type) arg2))
+      \end{lstlisting}
+
+        où l'on peut optionnelement spécifier le type (symbole
+        correspondant au nom de la classe) de l'argument
+        passé. Lorsqu'aucune indication de type n'est donnée, le type
+        par défaut aux données Scheme (\texttt{any-type}) est
+        attribué.
+
+      \subsubsection{Relation d'ordre sur les classes}
+        \label{class-order-rel}
+        Les fonctions génériques de notre système implante un
+        polymorphisme plus simple que celui disponible avec un système
+        aussi puissant que CLOS. Entre autre, nos fonctions génériques
+        ne permettent pas d'utiliser des appels à d'autres instances
+        comme \texttt{call-next-method}.
+
+        Ainsi, lors de l'appel, l'instance de la fonction générique la
+        \og meilleure \fg sera utilisée. Afin de trouver quelle
+        instance est la meilleure pour des arguments de types donnés,
+        une heuristique très simple est utilisée: ce sera l'instance
+        qui devra avoir des paramètres tous super-types des paramètres
+        actuels et dont la somme pour chaque argument formels des
+        nombres de super classes sera la plus grande. Cette
+        heuristique est utilisée pour sa simplicité et parce qu'elle
+        semble donner un comportement prédictible, mais c'est le
+        résultat d'un choix assez arbitraire.
+
+      \subsubsection{Invoquation d'instances}
+
+        Comme mentionné, la meilleure instance de la fonction
+        générique appellé, selon des arguments donnés, sera appellée
+        lors d'une invoquation. Bien sûr, les fonction génériques
+        effectuent du \og dispatch \fg multiple, et donc elles ne sont
+        pas limitées à un seul argument (figure \ref{ex-multdisp}).
+
+        \begin{figure}[h!]
+          \begin{lstlisting}
+> (define-generic (f (x A) y (z A) zz))
+> (define-method (f (x A) y (z A) zz)
+    (+ (A-a x) y (A-a z) (string->number zz)))
+> (define-method (f (x A) y z zz)
+    (+ (A-a x) y z zz))
+> (f (make-A 1) 2 (make-A 3) "4")
+10
+> (f (make-A 1) 2 3 4)
+10
+          \end{lstlisting}
+          \caption{Exemple d'invoquation d'une fonction générique et
+            du \og dispatch \fg multiple en résultant.}
+          \label{ex-multdisp}
+        \end{figure}
+        
+        Par contre, il est aussi possible d'invoquer une instance
+        particulière d'une fonction générique en utilisant un \og cast
+        \fg. Dans l'exemple illustré dans la figure \ref{ex-cast},
+
+        \begin{figure}[h!]
+          \begin{lstlisting}
+> (define-class A () (slot: a))
+> (define-class B (A) (slot: b))
+> (define-class C (B) (slot: c))
+> (define-generic (f x))
+> (define-method (f (x A)) (A-a x))
+> (define-method (f (x B)) (B-b x))
+> (f (make-C 1 2 3))
+2
+> (f (cast (make-C 1 2 3) 'A))
+1
+          \end{lstlisting}
+          \caption{Exemple illustrant l'utilisation du \og cast \fg
+            disponible appeller une instance spécifique d'une fonction
+            générique.}
+          \label{ex-cast}
+        \end{figure}
+
+      \subsubsection{Modes d'utilisations}
+
+        Deux modes de programmations sont définis pour le système
+        objet, tout particulièrement pour l'utilisation des fonctions
+        génériques. Le premier mode, le mode itératif (par défaut),
+        permet de définir et d'invoquer directement les nouvelles
+        instances, comme illustré dans les figure \ref{ex-cast} et
+        figure \ref{ex-multdisp}. Ce mode est très utile pour du
+        développement intéractif, comme c'est souvent le cas en
+        Scheme. 
+
+        Un second mode est aussi disponible, le mode manuel, qui
+        permettrait d'installer les instances de fonctions génériques,
+        sur demande, et non pas après chaque définitions de nouvelles
+        instances. Ce mode devient innévitable lorsqu'on compile du
+        code utilisant le système.
+
+        On peut donc choisir le mode désiré en utilisant les formes
+        spéciales:
+
+        \begin{lstlisting}
+(set-iterative-method-developpement!) ; par defaut
+(set-manual-method-developpement!)
+        \end{lstlisting}
+
+        Il est fortement de recommandé de choisir le mode
+        immédiatement après l'inclusion du système objet.
+
+    \subsection{Outils additionnels disponibles à l'exécution}
+
+      Plusieurs fonctionnalités sont displonible durant l'éxécution du
+      système d'objets afin de rendre plus agréable son
+      utilisation. Les fonctions principales sont:
+
+      \begin{itemize}
+      \item[\texttt{(find-class 'class-name)}:] Permet d'obtenir le
+        descripteur de classe de la classe nommée
+        \texttt{class-name}, si elle existe.
+      \item[]
+      \item[\texttt{(class-desc-id class-descriptor)}:] Retourne le
+        nom de la classe passée en paramètre.
+      \item[]
+      \item[\texttt{(class-desc-supers class-descriptor)}:] Retourne
+        la liste des super classes directes de la classe donnée.
+      \item[]
+      \item[\texttt{(object? obj)}:] Prédicat vérifiant si l'objet
+        donnée est une instance d'une classe du système.
+      \item[]
+      \item[\texttt{(get-class-id obj)}:] Retourne le nom symbolique
+        de la classe de l'objet donnée. Si l'objet n'est pas une
+        instance, alors \texttt{'any-type} est retourné.
+      \item[]
+      \item[\texttt{(instance-of? obj 'class-name)}:] Vérifie de
+        manière efficace si l'objet est une instance directe de la
+        classe associée au symbol donné.
+      \item[]
+      \item[\texttt{(object-light-copy obj)}:] Créé une copie légère
+        de l'instance passée en paramètre. Une copy légère créé une
+        nouvelle instance, ne fais que copier les pointeurs contenu
+        dans l'instance.
+      \end{itemize}
+
+      Aussi, une forme spéciale (\texttt{update!}) est disponible pour
+      faire une mise-à-jour incrémentale d'un champs d'instance. Une
+      mise-à-jour incrémentale survient lorsque qu'on modifie un
+      champs en fonction de sa valeur courante. La figure
+      \ref{ex-update-a} illustre un exemple typique de mise-à-jour
+      incrémentale et la figure \ref{ex-update-b} illustre un exemple
+      d'utilisation de la forme spéciale équivalent.
+
+      \begin{figure}[h!]
+          \begin{lstlisting}
+(define-class position () (slot: x) (slot: y))
+(let ((current-position (make-position 3 4)))
+    (position-x-set! current-position
+                     (+ (position-x current-position) 5)))
+          \end{lstlisting}
+          \caption{Exemple typique de mise-à-jour incrémentale}
+          \label{ex-update-a}
+      \end{figure}
+
+      \begin{figure}[h!]
+          \begin{lstlisting}
+(define-class position () (slot: x) (slot: y))
+(let ((current-position (make-position 3 4)))
+    (update! current-position position x (lambda (x) (+ x 5))))
+          \end{lstlisting}
+          \caption{Code équivalent utilisant la forme spéciale
+            \texttt{update!}}
+          \label{ex-update-b}
+      \end{figure}
+
+    Bien sûr, l'utilisation de cette macro n'est pas nécessaire, mais
+    permet souvent de faire de manière plus courte une mise-à-jour
+    incrémentale.
+
+\clearpage
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implantation}
+
+  Dans cette section, l'implantation du système objets décrit dans la
+  section \ref{api} sera décrite. Ainsi, les structures de données et
+  algorithmes seront expliqués afin d'expliquer le fonctionnement du
+  système et les choix qui ont dû être fait afin de resepecter le
+  mieux possible les contraintes imposées initialement.
+
+  \subsection{Classes et Objets}j
+    \label{classes&objets}
+    La forme spéciale de déclaration de classe (\texttt{define-class})
+    est implanté dans notre système comme une macro Scheme. Cette
+    macro prends les paramètre passés en entrés, soit le nom de la
+    classe, la liste des super classes et les champs de celle-ci et
+    effectue le traitement nécessaire afin de pouvoir générer le code
+    permettant d'obtenir le comportement décrit plus haut.
+
+    Le traitement nécessaire est relativement simple et se fait en 3
+    étapes:
+
+    \begin{enumerate}
+    \item Traitement des champs hérités des super classes
+    \item Traitement des champs directs de la classe
+    \item Génération de code
+    \end{enumerate}
+
+
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \subsubsection{Traitement des champs hérités des super classes}
+   
+      Afin d'obtenir les champs hérités des super classes, les super
+      classes sont passées dans l'ordre spécifié par
+      l'utilisateur. Les champs de chaque super classes sont ajoutés à
+      une \og eq? table \fg utilisé temporairement
+      (\texttt{temp-field-table}). On vérifie aussi que les champs ne
+      sont pas héritées plus d'une fois, sinon on retourne une
+      erreur. Bien sûr, une vérification assure que toutes les classes
+      sont des classes valides du système. La figure
+      \ref{heritage-code} illustre ce traitement.
+   
+      \begin{figure}[h!]
+        \begin{lstlisting}
+  (for-each
+   (lambda (super)
+     (let ((super-field-indices
+            (cond
+             ((table-ref class-table super #f) =>
+              (lambda (desc) (class-info-fi desc)))
+             (else (error "Inexistant super class")))))
+       (for-each
+        (lambda (field-index)
+          (if (not (table-ref temp-field-table (car field-index) 
+                               #f))
+              (table-set! temp-field-table
+                          (car field-index) (cdr field-index))
+              (error "Field already defined")))
+        super-field-indices)))
+   supers)
+        \end{lstlisting}
+        \caption{Code effectuant le traitement des champs hérités}
+        \label{heritage-code}
+      \end{figure}
+      
+      Maintenant que les champs hérités sont en mains, il ne suffit que de
+      traiter les champs directs de la classe.
+
+    \subsubsection{Traitement des champs directs de la classe}
+      Par la suite, les champs directs de la classe sont traités. Le
+      traitement effectue le \og parsing \fg des champs en s'assurant
+      qu'ils sont bien formés. Par la suite, une verification assure
+      que le champs n'existe pas dans les champs hérités, si c'est le
+      cas, alors le champs hérité est utilisé.
+
+      Encore une fois, l'information sur les champs est ajouté dans la
+      \og eq? table \fg temporaire.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(define (process-field! field)
+  (cond
+   ((and (list? field)
+         (>= (length field) 2))
+    (let ((slot-type (case (car field)
+                         ((slot: class-slot:) (car field))
+                         (else (error "Bad slot type!"))))
+          (slot-name (cadr field))
+          (slot-options (cddr field)))
+      ;; If a field is already provided by a super class
+      ;; then the super class's is used ...
+      (if (not (table-ref temp-field-table slot-name #f))
+          (table-set! temp-field-table
+                      slot-name
+                      (make-slot slot-type
+                                 (next-desc-index)
+                                 slot-options)))))
+   (else "ill-formed slot declaration")))
+(for-each process-field! fields)
+        \end{lstlisting}
+        \caption{Code effectuant le traitement des champs hérités}
+        \label{heritage-code}
+      \end{figure}
+
+      Lorsque toute l'information sur les champs est en main, il est
+      maintenant possible d'effectuer la génération de code implantant
+      la création et manipulation d'instances de cette nouvelle classe.
+
+    \subsubsection{Génération de code}
+      En ce qui a attraît à la génération du code exécuté, le logique
+      est très simple. Elle se résume bien par le code effectuant le
+      travail (figure \ref{class-code-gen})
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+  (let* ((field-indices (sort-field-indices
+                             (table->list temp-field-table)))
+          (class-desc (gen-descriptor field-indices)))
+    (table-set! class-table name 
+                 (make-class-info field-indices class-desc))
+    `(begin ,@(gen-accessors field-indices)
+             ,@(gen-setters field-indices)
+             ,(gen-predicate)
+             ,(gen-instantiator field-indices)
+             ,(gen-printfun field-indices)
+             (table-set! ,(rt-class-table-name)
+                          ',name
+                          ,(class-desc-name name))))
+        \end{lstlisting}
+        \caption{Génération de code par un appel à \texttt{define-class}}
+        \label{class-code-gen}
+      \end{figure}
+
+      Ainsi, on constate que la table temporaire de champs est
+      transformée en structure de donnée qui sera conservée tout au
+      long de la phase d'expansion macro, via une table globale
+      contenant toutes les classes déclarées
+      (\texttt{class-table}). Par la suite, les fonctions nécessaires
+      sont générées à partir de ces données de manière à ce que
+      l'accès au champs ce fasse rapidement, mais sans utiliser trop
+      d'espace mémoire non plus. Plus de détails sur la structure des
+      instances et l'accès au champs sont donnés dans la section
+      \ref{inst-struct}.
+
+      Il est à noter que le code généré par \texttt{gen-instantiator}
+      créé une variable globale à l'exécution qui possèdera un
+      pointeur direct vers le descripteur de class. On peut ainsi
+      accèder très facilement aux champs de classes. Par contre, un
+      pointeur vers le descripteur de classe est aussi placé dans une
+      table de hachage (similaire à celle présente lors de l'expansion
+      macro) afin de permettre plus de flexibilité.
+
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+  \subsection{Fonctions Génériques}
+    L'implantation utilisée pour les fonctions générique est très
+    simple, ce qui, nous croyons, assure de bonnes performances. De
+    manière globale, les déclarations ne font que stocker des
+    informations disponible durant l'expansion macro. Ensuite, il
+    faudra appeller la forme spéciale
+    \texttt{setup-generic-functions!} qui s'occupera de tout mettre en
+    place correctement. Nous croyons que c'est une approche très
+    simple parce qu'ainsi, lorsque \texttt{setup-generic-functions!}
+    est appellée, nous savons avoir toute l'information disponible
+    afin de générer le polymorphisme. Par contre, sinon après chaque
+    déclaration de nouvelle instance de fonction générique, il est
+    possible que le polymorphisme trouvé précédemment ne soit plus
+    valide.
+
+    Ainsi, il en résulte le besoin de créer les 2 modes d'utilisation
+    du système de fonctions générique suggérés dans la section portant
+    sur l'api: le mode interactif et le mode manuel. Dans le mode
+    interactif, le polymorphisme est re-généré après \emph{chaque}
+    déclaration de nouvelle instances de fonction générique. Ceci est
+    très problématique lorsqu'on compile le code puisuqe comme décrit
+    plus bas, le génération du polymorphisme est très coûteuse non
+    seulement en calcul mais aussi en taille de code. Et donc, il en
+    résulte en une explosion de la taille des exécutable lorsque le
+    programme est compilé en mode itératif. Par contre, avec le mode
+    manuel, il est possible de ne générer qu'une seule fois le
+    polymorphisme, lorsque le programmeur saît que toutes les
+    instances ont été déclarées et obtenir une taille de code
+    acceptable.
+
+    Nous allons maintenant donner plus de détails sur notre
+    implantation des fonctions génériques.
+
+    \subsubsection{Déclaration de fonctions génériques}
+      La déclaration est extrêmement simple. Lorsque la macro
+      \texttt{define-generic} est appellée, l'information sur le noms
+      des paramètres et le nom de la fonction sont conservés dans une
+      table de fonctions générique globale (\texttt{meth-table})
+      existant durant l'expansion macro. La figure \ref{defgen}
+      illustre le travail effectué lors de la déclaration d'une
+      fonction générique.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(define-macro (define-generic signature)
+  (define name (meth-name signature))
+  (define (parse-arg arg) ...)
+  (define (args) (map parse-arg (cdr signature)))
+  (table-set! meth-table name 
+               (make-generic-function name (args)))
+  ''ok)
+        \end{lstlisting}
+        \caption{Implantation de la déclaration de fonctions
+          génériques}
+        \label{defgen}
+      \end{figure}
+    
+    \subsubsection{Déclaration d'instances de fonctions génériques}
+      Le travail effectué pour la déclaration d'instance est aussi for
+      simple. Il ne suffi qu'a analyser la signature de l'instance
+      donnée afin d'en extraire le type de ses paramètre, et d'ajouter
+      une représentation abstraite de la méthode dans la structure
+      associée à la fonction générique existant durant l'expansion de
+      macro. La figure \ref{defmeth} illustre grossièrement le travail
+      effectué.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(define-macro (define-method signature bod . bods)
+  (define (parse-arg arg) ...)
+  (define (parse-args args) (map-values parse-arg args))
+  (with-exception-catcher
+   (lambda (e) ...)
+   (lambda ()
+     (cond
+      ((table-ref meth-table (name) #f) =>
+       (lambda (gen-fun)
+         (receive (args types) (parse-args (cdr signature))
+           (generic-function-instances-add!
+             gen-fun
+             (make-method (name) types
+                `(lambda ,args ,bod ,@bods)))
+           (case mode
+                  ((iterative) '(setup-generic-functions!))
+                  ((manual)    ''ok)
+                  (else        (error ...))))))
+      (else (raise unknown-meth-error))))))
+        \end{lstlisting}
+        \caption{Implantation des déclarations d'instancse de
+          fonctions génériques}
+        \label{defmeth}
+      \end{figure}
+
+    \subsubsection{Génération du polymorphisme}
+      Finalement, lorsque le moment est opportun, il faut mettre en
+      place les instances de fonctions génériques accumulées durant
+      l'expansion macro. La génération de code ce distingue en 3 étapes:
+
+      \begin{enumerate}
+      \item Mise en place des structures qui acceuilleront les
+        fonctions génériques.
+      \item Insertion des instances de fonctions génériques déclarées
+        dans l'endroit correspondant aux types de cet instance.
+      \item En utilisant le produit cartésien de tous les types
+        (classes), insérer les instances les plus appropriées et ce
+        pour chaque fonctions générique.
+      \end{enumerate}
+
+      Pour la première étape, les structures de données décrite dans
+      la section \ref{genfun-struct} seront initialisées. De plus, des
+      méta-fonctions génériques pour chaque déclarations seront
+      installées. Le but de celles-ci est de faire le \og dispatch \fg
+      durant l'exécution vers la bonne instance de la fonction
+      générique. Du code correspondant à l'expansion de la
+      méta-fonction pour une fonction générique \texttt{f} est
+      illustré dans la figure \ref{meta-genfun}.
+      
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (##decompile f)
+(lambda (x)
+  (let ((types (map get-class-id (list x))))
+    (cond ((table-ref f-meth-table types #f)
+            => (lambda (method) 
+                 (apply method (map uncast (list x)))))
+           (else (error "Unknown method")))))
+        \end{lstlisting}
+        \caption{Expansion de la méta-fonction pour une fonction
+          générique \texttt{f}}
+        \label{meta-genfun}
+      \end{figure}
+      
+      Pour la deuxième étape, chacune des instances déclarées seront
+      directement insérées pour les types spécifiés, dans la strucutre
+      de la fonction générique. Par exemple, la figure
+      \ref{ex-insertion-directe-meth} illustre une insertion directe
+      d'une instance déclarée de la fonction générique \texttt{f}
+      ayant comme paramètre la variable \texttt{x} de type \texttt{D}.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+(table-set! f-meth-table '(D) (lambda (x) (D-inst x)))
+        \end{lstlisting}
+        \caption{Insertion directe d'une instance de la fonction
+          générique \texttt{f} pour un paramètre \texttt{x} de type
+          \texttt{D}.}
+        \label{ex-insertion-directe-meth}
+      \end{figure}
+
+      Finalement, il ne reste plus qu'a \og remplir les trous \fg,
+      \textit{i.e.} de générer le polymorphisme en ajoutant pour
+      toutes les combinaisons de types de paramètres pour une fonction
+      générique donnée l'instance la meilleure (la plus spécialisée).
+
+      Pour ce faire, nous implantons l'algorithme \ref{algo-poly}. Cet
+      algorithme possède beaucoup de \og magie noire \fg afin de faire
+      fonctionner le polymorphisme, mais le résultat est concluant. En
+      résumé, on va placer l'instance la plus appropriée pour un
+      tuples de types appartenant au produit cartésiens de toutes les
+      possibilités de sous-types existante pour cette intance. Afin de
+      faire le triage, ou l'ordonnancement pour trouver l'instance la
+      plus spécifique, on utilise la même idée que celle décrite dans
+      la section \ref{class-order-rel} traitant sur l'ordre relatif
+      entre les classes. La listre triée de l'instnace la plus
+      spécifique à la moins spécifique est renversée de manière à ce
+      que l'insertion la plus spécifique soit en \emph{dernier} et
+      donc soit effective. Il en résulte donc que non seulement
+      l'algorithme est terriblement inneficace, mais aussi qu'il
+      génère beaucoup de code inutile.
+
+      Par contre, nous croyons que ce soit acceptable dans la mesure
+      où la génération du polymorphisme n'est pas appellée
+      souvent. Dans le mode manuel, elle devrait être invoquée une
+      seule fois. Dans le mode interactif, elle sera invoquée après
+      chaque déclaration d'instance, mais puisque l'utilisateur sera
+      typiquement dans une \og REPL \fg, le calcul et code généré
+      superflu ne sera pas visible. 
+
+      \begin{algorithm}
+        \caption{Algorithme de génération de polymorphisme}
+        \label{algo-poly}
+        \begin{algorithmic}
+        \FORALL{$g \in$ declared generic function which has instances}
+          \FORALL{$m \in $ reverse sorted methods of $g$}
+            \FORALL{$types \in$ possible valid argument types of $m$}
+              \STATE (table-set! $g$-method-table $types$ $m$)
+            \ENDFOR
+          \ENDFOR
+        \ENDFOR
+        \end{algorithmic}
+      \end{algorithm}
+      
+
+                    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \subsection{Structures de données à l'exécution}
+    Les structures de données utilisées pour implanter les classes,
+    fonctions génériques et instances de ces deux derniers à
+    l'exécution sont décrite dans cette section.
+  
+    \subsubsection{Descripteur de classes}
+      Les descripteurs de classes sont les objets représentant la méta
+      entité qu'est une classe. Le rôle que joue le descripteur dans
+      notre système est primordial, car c'est lui qui permet de dire
+      au fonctions accédant aux champs où retrouver ces derniers. On
+      peut résumé la structure d'un descripteur de classe par le
+      vecteur Scheme suivant:
+
+      \begin{lstlisting}
+#(nom-classe liste-supers . indexes)
+      \end{lstlisting}
+
+      Nous avons consciemment utilisé le point comme un abus de
+      notation dans ce vecteur afin de représenter que le reste du
+      vecteur correspond a des indices pour \emph{tout les champs de
+        toutes les classes}. Lorsque les champs sont ajoutés à un
+      descripteur de nouvelle classe, les nouveaux champs sont ajoutés
+      à la suite des champs précédemment existant dans toutes les
+      classes déjà déclarées. Ainsi, chaque champs possède un index
+      \emph{unique} dans les descripteurs de classes.
+
+      Ce choix résulte forcémment en de larges descripteurs de classes,
+      surtout lorsrqu'il y a beaucoup de classes ou des classes
+      possédant beaucoup de champs. Par contre, ceci permet d'avoir
+      toute la flexibilité désirée pour la création d'instances. 
+
+      Donc, dans le descripteur de classe, à l'index pré-déterminer pour
+      un champs donné, on y retrouvera l'index où se trouve ce champs en
+      question dans une instance de la classe. On pourra donc avoir des
+      instances de taille constante. Le coût de se choix résulte par
+      contre, en une indirection supplémentaire pour l'accès à un champs
+      (il faut aller chercher où se trouve le champs dans l'instance à
+      partir de l'information contenue dans le descripteur de classe).
+
+      Afin d'illustrer ce qui vient d'être énnoncé, l'exemple présenté
+      dans la figure \ref{ex-cdesc} illustre les descripteurs de classes
+      créés lorsque le système est \og frais \fg et qu'aucune autre
+      classe n'existe au préalable. On constate que par exemple, pour la
+      classe \texttt{C}, l'index d'instance du champs \texttt{zz} se
+      retrouve après trois \og trous \fg correspondant aux champs des
+      classes \texttt{A} et \texttt{B} et sa valeur d'index d'instance
+      est de 1.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (include "class.scm")
+object-system-loaded
+> (define-class A () (slot: a))
+> (find-class? 'A)
+#(A () 1)
+> (define-class B (A) (slot: b) (slot: c))
+> (find-class? 'B)
+#(B (A) 1 2 3)
+> (define-class C () (slot: zz))
+> (find-class? 'C)
+#(C () unknown-slot unknown-slot unknown-slot 1)
+        \end{lstlisting}
+        \caption{Exemple illustrant le comportement des descripteurs de
+          classes. Les descripteurs de classes grossissent de plus en
+          plus qu'il y a de classes déclarées.}
+        \label{ex-cdesc}
+      \end{figure}
+
+    \subsubsection{Structure des instances}
+      \label{inst-struct}
+      Les instances sont représentées de manière très simple. Il
+      s'agit d'un vecteur dont le premier champs est un pointeur vers
+      le descripteur de classe et les autres contiennent les champs
+      d'instances, dans l'ordre tel que décrit dans l'api (voir
+      section \ref{api}) ou dans le traitement déclarations de classes
+      (voir section \ref{classes&objets}). En reprenant les
+      déclarations de classes de la figure \ref{ex-cdesc}, la figure
+      \ref{ex-struct-inst} illustre la structure des instances de ces
+      classes \texttt{A}, \texttt{B} et \texttt{C}.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (make-A 'allo)
+#(#(A () 1) allo)
+> (make-B 'allo 'toto 'titi)
+#(#(B (A) 1 2 3) allo toto titi)
+> (make-C 'bonjour)
+#(#(C () unknown-slot unknown-slot unknown-slot 1) bonjour)
+        \end{lstlisting}
+        \caption{Illustration de la structure des instances de classes à
+          partir des définitions de classes données dans la figure
+          \ref{ex-cdesc}.}
+        \label{ex-struct-inst}
+      \end{figure}
+
+      Malgré le fait que les instances semblent d'augmenter de tailles
+      en fonction du nombres de classes précédemment définies, ce n'est
+      pas le cas puisqu'il ne s'agit que d'un pointeur vers le
+      descripteur de classe.
+
+      Ainsi, un accès à un champs se fait en temps constant ($\in
+      O(1)$). Il faut parcontre suivre deux indirections: une pour
+      obtenir le descripteur de classe et une seconde par le
+      descripteur de classe afin de savoir où se trouve le champs dans
+      l'instance. Par contre, l'accès aux champs de classes sont
+      directs puisque ceux-ci sont stockés directement dans le
+      descripteur de classe (où il y aurait normalement l'index
+      d'instance). Ce concept est illustré dans l'exemple
+      \ref{ex-slot-access}, où le code effectuant l'accès à des champs
+      d'instance et de classe est donnée pour une classe exemple.
+
+      \begin{figure}[h!]
+        \begin{lstlisting}
+> (define-class D () (slot: inst) (class-slot: clas))
+> (find-class? 'D)
+#(D () 1 unbound-class-slot)
+> (##decompile D-inst)
+(lambda (#:obj1373) (vector-ref #:obj1373 
+                        (vector-ref (vector-ref #:obj1373 0) 2)))
+> (##decompile D-clas)
+(lambda () (vector-ref D-class-descriptor 3))
+> (D-clas-set! 'allo)
+> (find-class? 'D)
+#(D () 1 allo)
+        \end{lstlisting}
+        \caption{Illustration du code effectuant l'accès aux champs
+          d'instances et de classes.}
+        \label{ex-slot-access}
+      \end{figure}
+
+    \subsubsection{Structure des fonction génériques et de leurs instances}
+      \label{genfun-struct}
+      Pour chacune des fonctions génériques déclarées, une variable
+      globale correspondant à cette fonction générique pointera vers
+      une table de hachage. Cette table sera populée par chacune des
+      instances de cette fonction générique. Une liste des types de
+      chaque argument d'une instance sera utilisée comme clée et la
+      valeur correspondra à la fermeture associée.
+
+      Ainsi, lorsque la fonction générique sera appellée via une
+      méta-fonction, une recherche dans la table sera effectuée et si
+      une instance est trouvée selon le type des arguments actuels
+      utilisés, alors cette fermeture sera appellée avec ces arguments
+    
+
+\clearpage
+
+
+ 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Limitations et Travail à Compléter}
+  L'implantation du système orienté objet présenté comporte plusieurs
+  limitations quand à son utilisaiton. La principale limitation serait
+  certainement reliée au fait que le système ne fonctionne pas de
+  manière inter-module. Donc il n'est pas possible d'utiliser des
+  classes déclarées dans un autre fichier. Nous croyons toutefois
+  qu'il serait difficile d'ajouter une telle fonctionnalité à notre
+  système sans ajouté un coût considérable pour l'accès aux champs
+  d'instances.
+
+  Aussi, le système est peu adapté à des changements dans son
+  fonctionnement. En effet, afin d'ajouter des nouvelles
+  fonctionnalitées au système, il faut plonger dans et modifier une
+  grande partie du code. Ainsi, l'ajout de protocole de méta-objets
+  tel que décrit dans \textit{The Art Of The MetaObject
+    Protocol}~\cite{AOMOP} serait un grand atout pour le système. Non
+  seulement, l'introspection serait beaucoup plus aisée, mais aussi la
+  modification du système pourrait se faire de manière très modulaire.
+
+  De plus, aucune comparaison de performances n'a pu être effectuée
+  sur le système objet. Ainsi, nous croyons que les performances
+  durant l'exécution, \textit{i.e.} coût de création d'instances
+  d'objets, d'accès aux champs ou des appels de fonctions génériques,
+  sont acceptables, mais une comparaison de \og benchmark \fg nous
+  permettrait d'en être encore plus certains. De plus, cela nous
+  donnerait la chance de pouvoir cibler les points plus faible du
+  système afin d'être mieux conscient des goulots d'étranglements.
+
+  Finalement, notre implantation utilise de manière abondante les
+  tables de hachages de Gambit-C lors de l'expansion des macros. Il en
+  résulte donc que notre système ne pourra pas être portable sur
+  d'autres implantations de Scheme. Par contre, si nous avions notre
+  propres librairies de tables de hachages, et que cette librairie
+  soit portable, nous croyons que le système serait facile à porter
+  sur toute implantation de Scheme supportant les macro à la
+  \texttt{define-macro}.
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+  En résumé, nous avons utiliser le système de macro de Scheme afin de
+  créer un système de programmation orienté objet, au dessus de
+  Scheme. Ainsi, il en résulte que le système est très modulaire, en
+  le sens, qu'il peut être utilisé à l'aide d'une simple inclusion de
+  code source (\texttt{(include "class.scm")}). 
+
+  Pour ce faire, nous avons utilisé des vecteurs comme structures de
+  donnée représentant les objets et les classes et des tables de
+  hachages pour contenir les instances de fonctions génériques. Grâce
+  à la structure choisie, l'accès aux champs d'instances de classes se
+  fait en trois références de vecteurs et l'appel de fonction
+  générique se fait en une référence à une table de hachage de test
+  \texttt{equal?}.
+
+  Grâce à l'aide d'un algorithme très naif, nous avons réussi à faire
+  un fonctionner le polymorphisme dans notre système de classe à
+  héritage multiple. Malgré une complexité élevée et une génération de
+  code inutile, nous croyons que le système est utilisable, mais
+  pourrait bénéficier d'une amélioration de l'algorithme de génération
+  du polymorphisme.
+
+  Ainsi, notre système d'objet possède beaucoup de fonctionnalités
+  provenant de CLOS, entre autre l'héritage multiple des classes et
+  des fonctions génériques polymorphes à \og dispatch \fg
+  multiple. Donc tout usagers ayant des connaissances préalables à
+  CLOS ne devrait pas avoir de difficulté à utiliser le système.
+
+  Finalement, notre système dépend directement de l'implantation de
+  Gambit-C, mais faiblement et pourrait donc sans trop de difficulté
+  être porté à toute implantation de Scheme supportant les macros à la
+  \texttt{define-macro} tel que disponible dans Gambit-C.
+
+  Nous croyons que l'implantation de ce système objets démontre bien
+  la puissance et l'expressivité du language Scheme. En effet, dans un
+  délais relativement court (deux à trois semaines), un système objet
+  relativement complet, fonctionnel et performant a pu être créé selon
+  des besoins spécifiques. Ainsi, malgré le fait que le language
+  Scheme est très léger, il peut facilement être adapté, même pour des
+  besoins qui peuvement sembler complexe, voir inaccessibles.
+
+  Il serait très intéressant pour les auteurs de pouvoir maintenant
+  ré-écrire tout le système objets, de manière à pouvoir ajouter un
+  protocol de méta-objets et améliorer l'algorithme de génération du
+  polymorphisme. Une ré-écriture complète du système serait
+  probalbement plus enrichissante qu'une modification puisque
+  l'expérience acquise lors de l'écriture de ce système apporterait
+  beaucoup pour le design lors d'une ré-écriture. Il en résulterait
+  alors un système très intéressant qui pourrait servir à de nombreux
+  programmeurs Scheme.
+
