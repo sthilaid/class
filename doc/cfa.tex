@@ -4,31 +4,31 @@
 \section{Introduction}
 
 L'analyse de flot de données est une partie importante des
-compilateurs optimisants. Elle permet d'obtenir de l'information sur
+compilateurs optimisant. Elle permet d'obtenir de l'information sur
 les endroits du programme vers lesquels une certaine valeur peut se
 propager. Cette information peut être utilisée par la suite comme
 point de départ de toute une panoplie de technique d'optimisation.
 
 Pour pouvoir effectuer l'analyse de flot de données, on doit avoir
 sous la main le graphe de flot de contrôle. Dans les langages
-statiques comme C le graphe de flot de contrôle est lui aussi
+statiques comme C, le graphe de flot de contrôle est lui aussi
 statique. Par contre, dans les langages dynamiques comme Scheme, il
 est plus difficile à obtenir à cause du fait que les fonctions sont
 des objets de premier ordre qui peuvent être passés en arguments,
 renvoyés en valeur de retour et entreposés dans des structures de
 données.
 
-Le fonctions étant des données, il est necéssaire de fait l'analyse de
+Les fonctions étant des données, il est nécessaire de fait l'analyse de
 flot de données pour obtenir le graphe de contrôle. Mais l'analyse de
-flot de données necéssite les graphe de contrôle. On a donc un
+flot de données nécessite les graphe de contrôle. On a donc un
 problème circulaire qui doit être résolu par une technique itérative,
-l'analyse de flôt de contrôle.
+l'analyse de flot de contrôle.
 
 \clearpage
 
-\section{Analyse de flôt de contrôle}
+\section{Analyse de flot de contrôle}
 
-L'analyse de flôt de contrôle sert à trouver, pour tout site d'appel
+L'analyse de flot de contrôle sert à trouver, pour tout site d'appel
 contenu dans le programme, quels fonctions peuvent y être
 appelées. Contrairement au langage C ou l'arbre de syntaxe communique
 cette information très simplement, dans le langage Scheme n'importe
@@ -47,12 +47,12 @@ précision par la suite.
 Nous avons comme types d'approximations les booléens vrai et faux, les
 nombres entiers négatifs, nul et positifs, les nombres flottants
 négatifs, nul et positifs, ainsi qu'un type représentant tous les
-nombres. Nous avons aussi inclu des types vecteur, fonction,
+nombres. Nous avons aussi inclus des types vecteur, fonction,
 primitives et le type xvalue représentant toutes valeurs pouvant
 provenir de l'extérieur du programme.
 
 Enfin, il y a aussi un type paire mais qui est plus complexe que les
-autres types car nous effectuons l'analyse de flôt de contrôle et de
+autres types car nous effectuons l'analyse de flot de contrôle et de
 données à l'intérieur des paire.  En effet, à chaque lieu d'allocation
 cons correspond une approximation paire qui possèdent deux ensemble
 d'approximation : car et cdr. Ces ensembles contiennent toutes les
@@ -75,9 +75,9 @@ ensemble fini. Cela garantie que l'algorithme devra terminer un jour.
 À chaque itération de l'algorithme, on analyse les expressions racines
 du programme et on annote les variables ainsi que les sites d'appel
 avec les bons ensemble d'approximations. On entre seulement dans le
-corp d'une fonction si elle fait partie d'un ensemble d'approximation
+corps d'une fonction si elle fait partie d'un ensemble d'approximation
 qui se retrouve en position d'appel. On marque les fonctions dont on a
-inspecté le corp pour ne jamais le faire plus d'une fois dans la même
+inspecté le corps pour ne jamais le faire plus d'une fois dans la même
 itération. Toutefois, on annote toujours ses variables paramètres à
 chaque fois qu'on la rencontre à un site d'appel.
 
@@ -103,26 +103,26 @@ du flot de contrôle mais elles remplissent aussi un autres rôle. Le
 but initial était de pouvoir déterminer quelles paires sont constantes
 dans tout le programme pour pouvoir effectuer du constant folding sur
 ces dernières. Nous avons donc ajouté, en plus des estimations, une
-gestion des primitves de mutation des paires. Comme une estimation
+gestion des primitives de mutation des paires. Comme une estimation
 paire est relié à un lieu d'appel à une primitive d'allocation, nous
 pouvons annoter ce lieu d'appel a chaque fois que son approximation
-correspondante est passée à une mutateur set-car! ou set-cdr!. Nous
+correspondante est passée à un mutateur set-car! ou set-cdr!. Nous
 devons aussi le faire pour la primitive eq?  pour traiter les cas tels
 que (eq? (list 1) (list 1)). En annotant ainsi, nous pouvons, dans le
-systeme de constant folding de gambit, vérifier si une approximation
-correspondant au noeud qu'on tente d'evaluer à la compilation, a été
+système de constant folding de gambit, vérifier si une approximation
+correspondant au noeud qu'on tente d'évaluer à la compilation, a été
 passée à une de ces primitives. Si ce n'est pas le cas, nous avons
-l'information necessaire pour affirmer que cette paire peut être
+l'information nécessaire pour affirmer que cette paire peut être
 traitée comme une constante et donc faire l'objet d'évaluation
 partielle.
 
 \subsection{Élimination des tests}
 
 Le constant folding permet d'éliminer à priori plusieurs tests de
-manière naive. Malheureusement, il a ses limitations en l'absence
+manière naïve. Malheureusement, il a ses limitations en l'absence
 d'une analyse plus poussée. En effet, pour pouvoir réduire un tel
 test, son argument doit être une constante.  Notre analyse permet
-d'ajouter d'autre cas ou ces tests pourront être eliminés. En effet,
+d'ajouter d'autre cas ou ces tests pourront être éliminés. En effet,
 comme nous déterminons des ensemble d'approximation et que ces
 ensemble contiennent des approximation de types, on peut grâce à ces
 approximations éliminer certains tests en s'assurant que tous les
@@ -131,7 +131,7 @@ types présents dans l'ensemble donnerait le même résultat.
 Pour cela, nous avons ajouté un nouveau type de constant folder qui
 filtre sur les approximation au lieu des constantes.  Nous devons
 toutefois nous limiter aux appels de primitive fait avec des variables
-comme paramètre car nous risquerions de faire disparaitre certain
+comme paramètre car nous risquerions de faire disparaître certain
 effets de bord en réduisant un sous-arbre et ainsi modifier la
 sémantique du programme.
 
@@ -165,7 +165,7 @@ approximations sont des paires. il peut donc réduire le test a true.
   \end{figure}
 
 On peut voir comment la réduction a été effectuée dans la figure
-\ref{cfa-ex1-out}. On s'apperçoit tout de suite que l'élimination de
+\ref{cfa-ex1-out}. On s'aperçoit tout de suite que l'élimination de
 code mort n'a pas enlevé la variable x alors qu'elle n'est pas
 utilisée. C'est une des failles de l'approche actuelle qui
 bénéficierait de la possibilité de pouvoirs faire plusieurs
@@ -209,7 +209,7 @@ liste est constant car notre analyse réalise qu'elle n'est jamais passée à
 
 On peut voir dans la figure \ref{cfa-ex2-out} que le compilateur a totalement
 réduit l'appel à \texttt{kindof-map}. En effet, sachant que la liste était
-constante, il a pu reduire le \texttt{let} au corp de \texttt{kindof-map} et
+constante, il a pu réduire le \texttt{let} au corp de \texttt{kindof-map} et
 réduire le \texttt{if} à sa branche vrai sachant quelle était la taille de la liste.
 Il reste encore certaines autres choses qui pourrait être optimisées dans cet exemple.
 On devrait pouvoir obtenir uniquement une liste constant '(1 4 9).
@@ -242,7 +242,7 @@ Une première limitation de notre système, qu'on découvre lorsqu'on
 observer certains exemples est que d'autres informations pourraient être
 obtenue si on effectuait de nouveau l'analyse sur du code déjà optimisé
 Avec ces informations, il serait possible de procéder a d'autres optimisations
-et réductions du code. Bien entendu, cela ne se fait pas sans cout et il
+et réductions du code. Bien entendu, cela ne se fait pas sans coût et il
 faut savoir ce qu'on est prêt a payer en temps de compilation. Malgré tout
 il devrait être optionellement possible de pouvoir effectuer l'analyse
 un certain nombre de fois arbitraire ou même de tenter d'atteindre un point
@@ -270,13 +270,13 @@ elle retourne. Une implémentation de cette technique est celle décrite
 par \cite{boucher2000} et est plus simple que l'approche générale que
 Shivers adopte dans son article.
 
-\subsection{Réduction d'intervales}
+\subsection{Réduction d'intervalles}
 
 Une autre technique très utile serait le 'interval narrowing' aussi
 implémentée par \cite{boucher2000}.  Il s'agit d'utiliser les
-primitives booleenes pour augmenter la précision d'une approximation
+primitives booléennes pour augmenter la précision d'une approximation
 intervalle dans une branche. Ces deux optimisations combinées pourrait
-être très utilies pour éliminer une grande quantité de tests de
+être très utiles pour éliminer une grande quantité de tests de
 typages sur les fixnums et les flonums et ainsi grandement accélérer
 le code.
 
@@ -300,7 +300,7 @@ analyse de flot de contrôle dans le système Gambit-C. Nous avons aussi
 implémenter une analyse de flot de données qui pourra être améliorée
 en augmentant la précision des estimations qu'elle produit. Notre
 analyse suis entre autre le flot des paires ce qui permet de faire
-certaines evaluations partielles sur les paires constantes. Il a aussi
+certaines évaluations partielles sur les paires constantes. Il a aussi
 permis de faire des optimisations en permettant d'éliminer certains
 tests redondant.
 
