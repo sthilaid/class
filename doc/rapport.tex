@@ -29,27 +29,55 @@
 \author{par Jérémie Lasalle Ratelle et David St-Hilaire}
 \maketitle
 
-\clearpage
+%% \clearpage
 
 \tableofcontents
 
-\clearpage
+%% \clearpage
+
 
 \input{cfa.tex}
-\clearpage
+%% \clearpage
 
 \input{systeme-objet.tex}
-\clearpage
+%% \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter{Conclusion}
-  ...
-
-  blabla
   
-  ...
+  En résumé, nous avons étendu l'implantation du système Scheme
+  Gambit-C en lui ajoutant plusieurs améliorations. 
 
-\clearpage
+  Dans un premier temps, une analyse de flot de contrôle de type
+  \textit{0-cfa} a été ajoutée aux analyses et transformations de code
+  déjà existante. Cette analyse permet d'obtenir une approximation du
+  flot de contrôle du programme, de plus qu'une approximation du flot
+  des données résultant de ce flot de contrôle. Les approximations
+  obtenues sont conservatrices, afin de bien saisir la sémantique du
+  programme analysé.
+
+  Ensuite, cette analyse a été utilisé dans l'ajout d'optimisations
+  d'évaluations partielles reposant sur le flot des données obtenu
+  précédemment. --- TODO Jeremie ---
+
+  Finalement, un système orienté objet polymorphe à héritage multiple,
+  à la CLOS, a été écrit en utilisant les macros Scheme. Ce système
+  fut conçu spécialement pour avoir une accès rapide aux champs des
+  objets, tout en faisant en sorte que les objets soient de taile
+  minimale. 
+
+  Bien sûr, beaucoup d'aspects de notre projet méritent d'être
+  re-travaillés ou améliorer. Entre autres, plusieurs nouvelles
+  évaluations partielles pourraient être ajoutées. Aussi, une
+  ré-écriture du système objet lui permettant de fournir un protocole
+  de méta-objets donnerait beaucoup plus de flexibilité à celui-ci.
+
+  Malgré tout, nous croyons que notre projet constitue une
+  contribution permettant d'améliorer le système Gambit-C, tant au
+  point de vue d'une compilation plus optimisée qu'au point vue plus
+  complétude.
+
+%% \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
