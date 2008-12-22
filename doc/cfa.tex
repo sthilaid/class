@@ -1,0 +1,313 @@
+\chapter{Analyse de flot de contrôle}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+L'analyse de flot de données est une partie importante des
+compilateurs optimisants. Elle permet d'obtenir de l'information sur
+les endroits du programme vers lesquels une certaine valeur peut se
+propager. Cette information peut être utilisée par la suite comme
+point de départ de toute une panoplie de technique d'optimisation.
+
+Pour pouvoir effectuer l'analyse de flot de données, on doit avoir
+sous la main le graphe de flot de contrôle. Dans les langages
+statiques comme C le graphe de flot de contrôle est lui aussi
+statique. Par contre, dans les langages dynamiques comme Scheme, il
+est plus difficile à obtenir à cause du fait que les fonctions sont
+des objets de premier ordre qui peuvent être passés en arguments,
+renvoyés en valeur de retour et entreposés dans des structures de
+données.
+
+Le fonctions étant des données, il est necéssaire de fait l'analyse de
+flot de données pour obtenir le graphe de contrôle. Mais l'analyse de
+flot de données necéssite les graphe de contrôle. On a donc un
+problème circulaire qui doit être résolu par une technique itérative,
+l'analyse de flôt de contrôle.
+
+\clearpage
+
+\section{Analyse de flôt de contrôle}
+
+L'analyse de flôt de contrôle sert à trouver, pour tout site d'appel
+contenu dans le programme, quels fonctions peuvent y être
+appelées. Contrairement au langage C ou l'arbre de syntaxe communique
+cette information très simplement, dans le langage Scheme n'importe
+quelle fonction peut potentiellement se retrouver à un site d'appel
+particulier. Pour trouver ces information, nous utiliserons une
+variante de la technique 0-cfa décrite dans \cite{shivers88, shivers91}.
+
+\subsection{Ensembles d'approximations}
+
+Notre analyse sur des ensembles d'approximation pouvant contenir les
+types de valeurs possibles dans un programme Scheme. Nous avons
+volontairement limité la précision de nos approximation dans le but
+d'effectuer l'analyse de manière rigoureuse et pouvoir améliorer la
+précision par la suite.
+
+Nous avons comme types d'approximations les booléens vrai et faux, les
+nombres entiers négatifs, nul et positifs, les nombres flottants
+négatifs, nul et positifs, ainsi qu'un type représentant tous les
+nombres. Nous avons aussi inclu des types vecteur, fonction,
+primitives et le type xvalue représentant toutes valeurs pouvant
+provenir de l'extérieur du programme.
+
+Enfin, il y a aussi un type paire mais qui est plus complexe que les
+autres types car nous effectuons l'analyse de flôt de contrôle et de
+données à l'intérieur des paire.  En effet, à chaque lieu d'allocation
+cons correspond une approximation paire qui possèdent deux ensemble
+d'approximation : car et cdr. Ces ensembles contiennent toutes les
+approximation de tous les types ayant pu potentiellement être
+entreposés dans une paire allouée à ce lieu d'allocation lors de la
+création ou bien de manière subséquente par le biais des primitives
+set-car! et set-cdr!. Il est certain que cette estimation est assez
+grossière mais elle permet quand même d'obtenir des informations
+intéressantes et d'éviter d'obtenir une approximation xvalue beaucoup
+trop conservatrice lors de l'appel à un accesseur de paire.
+
+\subsection{Algorithme}
+
+L'algorithme est itératif à point fixe. Il effectue son analyse tant
+que des modifications sont ajoutées aux résultats. C'est pourquoi il
+ne doit jamais rien enlever aux ensembles d'approximation et que
+toutes les valeurs d'approximation possible doivent faire partie d'un
+ensemble fini. Cela garantie que l'algorithme devra terminer un jour.
+
+À chaque itération de l'algorithme, on analyse les expressions racines
+du programme et on annote les variables ainsi que les sites d'appel
+avec les bons ensemble d'approximations. On entre seulement dans le
+corp d'une fonction si elle fait partie d'un ensemble d'approximation
+qui se retrouve en position d'appel. On marque les fonctions dont on a
+inspecté le corp pour ne jamais le faire plus d'une fois dans la même
+itération. Toutefois, on annote toujours ses variables paramètres à
+chaque fois qu'on la rencontre à un site d'appel.
+
+On conserve un ensemble ESCAPED qui contient les fonction et les
+paires ayant échappé au programme. On initialise cet ensemble avec les
+ensembles d'estimation des variables globales. Par la suite, a chaque
+itération, on le met a jour en 'simulant' un appel a chacune des
+fonctions qu'il contient avec comme valeurs de paramètres ce même
+ensemble escape. On l'annote avec les résultats de ces appels. De
+plus, on l'annote avec les ensembles d'approximation des champs car et
+cdr de toutes les paires qu'il contient. Ainsi, notre analyse de
+contrôle de flot tient compte de ce qui peut se passer à l'extérieur
+du programme, dans la mesure du possible.
+
+\clearpage
+
+\section{Évaluation Partielle}
+
+\subsection{Analyse des paires}
+
+Les estimations des paires sont très utiles pour améliorer l'analyse
+du flot de contrôle mais elles remplissent aussi un autres rôle. Le
+but initial était de pouvoir déterminer quelles paires sont constantes
+dans tout le programme pour pouvoir effectuer du constant folding sur
+ces dernières. Nous avons donc ajouté, en plus des estimations, une
+gestion des primitves de mutation des paires. Comme une estimation
+paire est relié à un lieu d'appel à une primitive d'allocation, nous
+pouvons annoter ce lieu d'appel a chaque fois que son approximation
+correspondante est passée à une mutateur set-car! ou set-cdr!. Nous
+devons aussi le faire pour la primitive eq?  pour traiter les cas tels
+que (eq? (list 1) (list 1)). En annotant ainsi, nous pouvons, dans le
+systeme de constant folding de gambit, vérifier si une approximation
+correspondant au noeud qu'on tente d'evaluer à la compilation, a été
+passée à une de ces primitives. Si ce n'est pas le cas, nous avons
+l'information necessaire pour affirmer que cette paire peut être
+traitée comme une constante et donc faire l'objet d'évaluation
+partielle.
+
+\subsection{Élimination des tests}
+
+Le constant folding permet d'éliminer à priori plusieurs tests de
+manière naive. Malheureusement, il a ses limitations en l'absence
+d'une analyse plus poussée. En effet, pour pouvoir réduire un tel
+test, son argument doit être une constante.  Notre analyse permet
+d'ajouter d'autre cas ou ces tests pourront être eliminés. En effet,
+comme nous déterminons des ensemble d'approximation et que ces
+ensemble contiennent des approximation de types, on peut grâce à ces
+approximations éliminer certains tests en s'assurant que tous les
+types présents dans l'ensemble donnerait le même résultat.
+
+Pour cela, nous avons ajouté un nouveau type de constant folder qui
+filtre sur les approximation au lieu des constantes.  Nous devons
+toutefois nous limiter aux appels de primitive fait avec des variables
+comme paramètre car nous risquerions de faire disparaitre certain
+effets de bord en réduisant un sous-arbre et ainsi modifier la
+sémantique du programme.
+
+\clearpage
+
+\section{Exemples}
+
+Voici quelques exemples qui illustre les optimisations possibles grâces aux
+nouvelles information que notre analyse fourni à la béta-réduction.
+
+\subsection{\og Constant folding \fg de tests}
+
+Cet exemple vise a démontrer la capacité du système d'utiliser les
+ensemble d'approximation afin de réduire certaines primitives de
+test. Dans l'exemple de la figure \ref{cfa-ex1-source}, la beta
+réduction telle qu'elle est implémentée dans Gambit-C ne peut déduire
+que la valeur du test de paire sera toujours vrai.  Avec notre
+analyse, nous avons pu introduire un nouveau réducteur qui vérifie
+l'ensemble d'approximation de la variable x et réalise que toutes les
+approximations sont des paires. il peut donc réduire le test a true.
+
+  \begin{figure}[htbp!]
+    \begin{lstlisting}
+(let ((x (if j (cons 1 2) (cons 3 4))))
+  (let ((y (##pair? x)))
+    y))
+    \end{lstlisting}
+    \caption{Code source illustrant le \og constant folding \fg de la
+      fonction \texttt{pair?}.}
+    \label{cfa-ex1-source}
+  \end{figure}
+
+On peut voir comment la réduction a été effectuée dans la figure
+\ref{cfa-ex1-out}. On s'apperçoit tout de suite que l'élimination de
+code mort n'a pas enlevé la variable x alors qu'elle n'est pas
+utilisée. C'est une des failles de l'approche actuelle qui
+bénéficierait de la possibilité de pouvoirs faire plusieurs
+itérations.
+
+ \begin{figure}[htbp!]
+    \begin{lstlisting}
+(let ((x (if j '(1 . 2) '(3 . 4))))
+  #t)
+    \end{lstlisting}
+    \caption{Code obtenu après les phases d'optimisations de Gambit-C à
+      partir du code source présenté dans la figure \ref{cfa-ex1-source}.}
+    \label{cfa-ex1-out}
+  \end{figure}
+
+\clearpage
+
+\subsection{Optimisations des paires constantes}
+
+Cet exemple tente de démontrer ce que l'analyse des paires constante permet
+d'optimiser. Dans l'exemple de la figure \ref{cfa-ex2-source}, on démontre
+ce que le \og Constant folding \fg de Gambit-C peut accomplir lorsqu'on lui
+donne l'information que la liste lst est constante. Nous savons que cette
+liste est constant car notre analyse réalise qu'elle n'est jamais passée à
+\texttt{set-car!}, \texttt{set-cdr!} et \texttt{eq?}.
+
+\begin{figure}[htbp!]
+  \begin{lstlisting}
+(let ((lst (cons 1 (cons 2 (cons 3 '()))))
+      (kindof-map (lambda (f lst)
+                    (if (<= (length lst) 3)
+                        (list (f (car lst))
+                              (f (cadr lst))
+                              (f (caddr lst)))
+                        (map f lst)))))
+  (kindof-map (lambda (x) (* x x)) lst))
+  \end{lstlisting}
+  \caption{Code source illustrant l'optimisation des paires constantes.}
+  \label{cfa-ex2-source}
+\end{figure}
+
+On peut voir dans la figure \ref{cfa-ex2-out} que le compilateur a totalement
+réduit l'appel à \texttt{kindof-map}. En effet, sachant que la liste était
+constante, il a pu reduire le \texttt{let} au corp de \texttt{kindof-map} et
+réduire le \texttt{if} à sa branche vrai sachant quelle était la taille de la liste.
+Il reste encore certaines autres choses qui pourrait être optimisées dans cet exemple.
+On devrait pouvoir obtenir uniquement une liste constant '(1 4 9).
+
+\begin{figure}[htbp!]
+  \begin{lstlisting}
+(let ((f (lambda (x) (* x x))))
+  ('#<procedure #8 ##list> (f 1) (f 2) (f 3)))
+  \end{lstlisting}
+  \caption{Code généré à partir du code source fourni dans la figure
+    \ref{cfa-ex2-source} par le compilateur Gambit-C en utilisant les
+    résultats de notre analyse \textit{0-cfa} et notre détection des
+    paires constantes.}
+  \label{cfa-ex2-out}
+\end{figure}
+
+\clearpage
+
+\section{Travail futur}
+
+Un système d'optimisation n'est jamais terminé et les résultats que
+nous obtenons grâce a cette analyse ne sont que le début de ce qui
+pourrait être fait. L'analyse de flot de contrôle elle même est
+complète.  C'est surtout l'analyse de flot de données qui pourrait
+bénéficier d'améliorations
+
+\subsection{Multiples itérations}
+
+Une première limitation de notre système, qu'on découvre lorsqu'on
+observer certains exemples est que d'autres informations pourraient être
+obtenue si on effectuait de nouveau l'analyse sur du code déjà optimisé
+Avec ces informations, il serait possible de procéder a d'autres optimisations
+et réductions du code. Bien entendu, cela ne se fait pas sans cout et il
+faut savoir ce qu'on est prêt a payer en temps de compilation. Malgré tout
+il devrait être optionellement possible de pouvoir effectuer l'analyse
+un certain nombre de fois arbitraire ou même de tenter d'atteindre un point
+fixe au niveau du code.
+
+\subsection{Analyse de flot sur les vecteurs}
+
+Notre système effectue l'analyse de flot de contrôle a l'intérieur des paires
+et effectue aussi l'analyse de flot de données sur ces dernières. Il serait
+possible et même bénéfique d'effectuer les mêmes analyses sur les vecteurs.
+Cela nous permettrait de suivre les fonctions à l'intérieur des vecteurs
+et aussi de détecter les vecteurs constants qui pourrait être réduit à
+la compilation. Cette analyse ne serait pas très complexe a implémenter.
+
+\subsection{Filtrage de types}
+
+Une amélioration très intéressantes serait d'utiliser le
+filtrage de types tel que décrit dans \cite{shivers88}.  Cette
+technique nous permettrait d'augmenter la précision de nos ensembles
+d'approximation dans les branches d'une conditionelle en fonction du
+test de typage qu'elle effectue. On peut aussi utiliser les appels aux
+primitives de la même façon car celles-ci contiennent des tests de
+types cachés qui nous permettre aussi de préciser notre ensemble si
+elle retourne. Une implémentation de cette technique est celle décrite
+par \cite{boucher2000} et est plus simple que l'approche générale que
+Shivers adopte dans son article.
+
+\subsection{Réduction d'intervales}
+
+Une autre technique très utile serait le 'interval narrowing' aussi
+implémentée par \cite{boucher2000}.  Il s'agit d'utiliser les
+primitives booleenes pour augmenter la précision d'une approximation
+intervalle dans une branche. Ces deux optimisations combinées pourrait
+être très utilies pour éliminer une grande quantité de tests de
+typages sur les fixnums et les flonums et ainsi grandement accélérer
+le code.
+
+\subsection{Système de module}
+
+Finalement, notre système ainsi que le compilateur gambit-c
+bénéficierait énormément de l'ajout d'un système de module permettant
+l'encapsulation des fonctions et l'export explicite. Cela nous
+permettrait d'augmenter le nombre d'optimisation possible pour
+certaine fonction interne du au fait qu'elle n'echapperait pas au
+module et donc qu'elle ne pourrait pas etre appelee avec des valeurs
+externes. Cela augmenterait sensiblement la précision de notre
+analyse.
+
+\clearpage
+
+\section{Conclusion}
+
+Nous avons réussi, lors de ce travail, à implémenter avec succès une
+analyse de flot de contrôle dans le système Gambit-C. Nous avons aussi
+implémenter une analyse de flot de données qui pourra être améliorée
+en augmentant la précision des estimations qu'elle produit. Notre
+analyse suis entre autre le flot des paires ce qui permet de faire
+certaines evaluations partielles sur les paires constantes. Il a aussi
+permis de faire des optimisations en permettant d'éliminer certains
+tests redondant.
+
+Nous croyons que notre implémentation est un bon point de départ pour
+permettre l'implémentation de techniques plus poussées d'optimisation
+dans le système Gambit-C. Éventuellement, la beta réduction du système
+actuel pourrait utiliser l'analyse de flot de données de notre
+implémentation au lieu d'avoir deux analyses différentes. Nous
+souhaitons de tout coeur que notre travail soit intégré au système
+Gambit-C.
