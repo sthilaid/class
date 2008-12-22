@@ -5,18 +5,18 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Introduction}
 
-Les languages de programmations se distinguent par différents concepts
-ou caractéristiques qui leurs sont propres. Le language Scheme est
+Les langages de programmations se distinguent par différents concepts
+ou caractéristiques qui leurs sont propres. Le langage Scheme est
 caractérisé non seulement par son système de macro très évolué et par
-les foncitons de premières classes, mais aussi par sa
+les fonctions de premières classes, mais aussi par sa
 \emph{simplicité}.
 
-En effet, Scheme est un language très minimaliste. Il fut conçu de
+En effet, Scheme est un langage très minimaliste. Il fut conçu de
 manière à comprendre tous les outils nécessaire, afin d'en avoir aussi
 peu que possible, contrairement à Lisp où l'approche inverse est
 utilisée. Ainsi, pour programmer en Scheme des programmes non
 triviaux, plusieurs librairies auxiliaires doivent être généralement
-écrites. Par contre, puisque le language est très expressifs, ces
+écrites. Par contre, puisque le langage est très expressifs, ces
 librairies peuvent être écrites rapidement.
 
 Un module intéressant à ajouter au dessus de Scheme est un système
@@ -48,7 +48,7 @@ expressive de Scheme.
       des opérations extrêmement fréquentes et donc, afin d'avoir un
       système utilisable à l'intérieur d'applications concrètes, ces
       accès doivent se faire le plus rapidement possible afin de
-      diminuer l'impacte du coût de l'utilisaiton d'un système
+      diminuer l'impacte du coût de l'utilisation d'un système
       d'objets.
 
     \subsubsection{Rapidité de choix d'instances de fonction générique}
@@ -67,7 +67,7 @@ expressive de Scheme.
 
     \subsubsection{Interface à la CLOS}
       Le système d'objet devrait avoir une interface similaire à celle
-      fournie par le système objets du language Common
+      fournie par le système objets du langage Common
       Lisp~\cite{COMMONLISP} (Common Lisp Object System, ou encore
       CLOS). Puisque Scheme est une version épurée de Common Lisp et
       puisque CLOS est déjà bien connu et à fait ses preuves en tant
@@ -76,7 +76,7 @@ expressive de Scheme.
       concepts similaires à ceux qui sont déjà bien connu chez CLOS,
       afin d'augmenter l'accessibilité du système.
     
-    \subsubsection{Développement intéractif}
+    \subsubsection{Développement interactif}
       Il serait intéressant que le système permette de pouvoir faire
       du développement itératif (de manière interactive avec un REPL)
       de manière à ce que le système soit cohérent avec la philosophie
@@ -87,7 +87,7 @@ expressive de Scheme.
       soit compilé (et donc exécuté rapidement).
 
     \subsubsection{Portabilité relative}
-      Finalement, il serait pertinant que système soit écrit de
+      Finalement, il serait pertinent que système soit écrit de
       manière portable afin qu'il puisse être utilisé dans plusieurs
       implantation de Scheme. 
 
@@ -111,7 +111,7 @@ expressive de Scheme.
       où \texttt{class-name} est le nom de la class définie,
       \texttt{supers} est une liste des super-classes de la classes
       définie et \texttt{slots...} sera des définitions des champs de
-      l'objets.
+      l'objet.
 
       Les champs peuvent être soient présents dans chaque instances
       (obtenu par \texttt{(slot: nom)} ou commun à toutes les
@@ -120,10 +120,10 @@ expressive de Scheme.
       
       \begin{itemize}
       \item[\texttt{read-hook:}] Permet de passer en paramètre
-        plusieurs fonctions qui seront appellées avant chaque lecture
+        plusieurs fonctions qui seront appelées avant chaque lecture
         du champs.
       \item[\texttt{write-hook:}] Permet de passer en paramètre
-        plusieurs fonctions qui seront appellées avant chaque écriture
+        plusieurs fonctions qui seront appelées avant chaque écriture
         du champs.
       \end{itemize}
 
@@ -144,11 +144,11 @@ expressive de Scheme.
   (slot: b (write-hooks: (lambda (o new-v) (pp new-v)))))
 (define-class C (A B) (class-slot: c))
         \end{lstlisting}
-        \caption{Exemple de définition de class}
+        \caption{Exemple de définition de classe}
         \label{ex-defclass}
       \end{figure}
 
-      Une déclaraiton de classe résulte en la création de plusieurs
+      Une déclaration de classe résulte en la création de plusieurs
       fonctions utilitaires. Par exemple pour une définition comme
       \begin{lstlisting}
 (define-class A () (slot: a) (class-slot: b))}
@@ -190,7 +190,7 @@ expressive de Scheme.
       \item[\texttt{(A-b)}:] Accès au champs statique \texttt{b}.
       \item[]
 
-      \item[\texttt{(A-b-set! new-b)}:] Modificationdu champs
+      \item[\texttt{(A-b-set! new-b)}:] Modification du champs
         statique \texttt{b}.
       \item[]
 
@@ -221,7 +221,7 @@ expressive de Scheme.
 (define-method (fname (arg1 arg1-type) arg2))
       \end{lstlisting}
 
-        où l'on peut optionnelement spécifier le type (symbole
+        où l'on peut optionnellement spécifier le type (symbole
         correspondant au nom de la classe) de l'argument
         passé. Lorsqu'aucune indication de type n'est donnée, le type
         par défaut aux données Scheme (\texttt{any-type}) est
@@ -249,7 +249,7 @@ expressive de Scheme.
       \subsubsection{Invoquation d'instances}
 
         Comme mentionné, la meilleure instance de la fonction
-        générique appellé, selon des arguments donnés, sera appellée
+        générique invoquée, selon des arguments donnés, sera appellée
         lors d'une invoquation. Bien sûr, les fonction génériques
         effectuent du \og dispatch \fg multiple, et donc elles ne sont
         pas limitées à un seul argument (figure \ref{ex-multdisp}).
@@ -289,7 +289,7 @@ expressive de Scheme.
 1
           \end{lstlisting}
           \caption{Exemple illustrant l'utilisation du \og cast \fg
-            disponible appeller une instance spécifique d'une fonction
+            disponible appeler une instance spécifique d'une fonction
             générique.}
           \label{ex-cast}
         \end{figure}
@@ -302,13 +302,13 @@ expressive de Scheme.
         permet de définir et d'invoquer directement les nouvelles
         instances, comme illustré dans les figure \ref{ex-cast} et
         figure \ref{ex-multdisp}. Ce mode est très utile pour du
-        développement intéractif, comme c'est souvent le cas en
+        développement interactif, comme c'est souvent le cas en
         Scheme. 
 
         Un second mode est aussi disponible, le mode manuel, qui
         permettrait d'installer les instances de fonctions génériques,
         sur demande, et non pas après chaque définitions de nouvelles
-        instances. Ce mode devient innévitable lorsqu'on compile du
+        instances. Ce mode devient inévitable lorsqu'on compile du
         code utilisant le système.
 
         On peut donc choisir le mode désiré en utilisant les formes
@@ -324,7 +324,7 @@ expressive de Scheme.
 
     \subsection{Outils additionnels disponibles à l'exécution}
 
-      Plusieurs fonctionnalités sont displonible durant l'éxécution du
+      Plusieurs fonctionnalités sont disponible durant l'exécution du
       système d'objets afin de rendre plus agréable son
       utilisation. Les fonctions principales sont:
 
@@ -348,10 +348,10 @@ expressive de Scheme.
       \item[]
       \item[\texttt{(instance-of? obj 'class-name)}:] Vérifie de
         manière efficace si l'objet est une instance directe de la
-        classe associée au symbol donné.
+        classe associée au symbole donné.
       \item[]
       \item[\texttt{(object-light-copy obj)}:] Créé une copie légère
-        de l'instance passée en paramètre. Une copy légère créé une
+        de l'instance passée en paramètre. Une copie légère créé une
         nouvelle instance, ne fais que copier les pointeurs contenu
         dans l'instance.
       \end{itemize}
@@ -400,7 +400,7 @@ expressive de Scheme.
   Dans cette section, l'implantation du système objets décrit dans la
   section \ref{api} sera décrite. Ainsi, les structures de données et
   algorithmes seront expliqués afin d'expliquer le fonctionnement du
-  système et les choix qui ont dû être fait afin de resepecter le
+  système et les choix qui ont dû être fait afin de respecter le
   mieux possible les contraintes imposées initialement.
 
   \subsection{Classes et Objets}j
@@ -464,7 +464,7 @@ expressive de Scheme.
     \subsubsection{Traitement des champs directs de la classe}
       Par la suite, les champs directs de la classe sont traités. Le
       traitement effectue le \og parsing \fg des champs en s'assurant
-      qu'ils sont bien formés. Par la suite, une verification assure
+      qu'ils sont bien formés. Par la suite, une vérification assure
       que le champs n'existe pas dans les champs hérités, si c'est le
       cas, alors le champs hérité est utilisé.
 
@@ -502,7 +502,7 @@ expressive de Scheme.
       la création et manipulation d'instances de cette nouvelle classe.
 
     \subsubsection{Génération de code}
-      En ce qui a attraît à la génération du code exécuté, le logique
+      En ce qui a attrait à la génération du code exécuté, le logique
       est très simple. Elle se résume bien par le code effectuant le
       travail (figure \ref{class-code-gen})
 
@@ -538,9 +538,9 @@ expressive de Scheme.
       \ref{inst-struct}.
 
       Il est à noter que le code généré par \texttt{gen-instantiator}
-      créé une variable globale à l'exécution qui possèdera un
-      pointeur direct vers le descripteur de class. On peut ainsi
-      accèder très facilement aux champs de classes. Par contre, un
+      créé une variable globale à l'exécution qui possédera un
+      pointeur direct vers le descripteur de classe. On peut ainsi
+      accéder très facilement aux champs de classes. Par contre, un
       pointeur vers le descripteur de classe est aussi placé dans une
       table de hachage (similaire à celle présente lors de l'expansion
       macro) afin de permettre plus de flexibilité.
@@ -551,11 +551,11 @@ expressive de Scheme.
     simple, ce qui, nous croyons, assure de bonnes performances. De
     manière globale, les déclarations ne font que stocker des
     informations disponible durant l'expansion macro. Ensuite, il
-    faudra appeller la forme spéciale
+    faudra appeler la forme spéciale
     \texttt{setup-generic-functions!} qui s'occupera de tout mettre en
     place correctement. Nous croyons que c'est une approche très
     simple parce qu'ainsi, lorsque \texttt{setup-generic-functions!}
-    est appellée, nous savons avoir toute l'information disponible
+    est appelée, nous savons avoir toute l'information disponible
     afin de générer le polymorphisme. Par contre, sinon après chaque
     déclaration de nouvelle instance de fonction générique, il est
     possible que le polymorphisme trouvé précédemment ne soit plus
@@ -566,13 +566,13 @@ expressive de Scheme.
     sur l'api: le mode interactif et le mode manuel. Dans le mode
     interactif, le polymorphisme est re-généré après \emph{chaque}
     déclaration de nouvelle instances de fonction générique. Ceci est
-    très problématique lorsqu'on compile le code puisuqe comme décrit
+    très problématique lorsqu'on compile le code puisque comme décrit
     plus bas, le génération du polymorphisme est très coûteuse non
     seulement en calcul mais aussi en taille de code. Et donc, il en
     résulte en une explosion de la taille des exécutable lorsque le
     programme est compilé en mode itératif. Par contre, avec le mode
     manuel, il est possible de ne générer qu'une seule fois le
-    polymorphisme, lorsque le programmeur saît que toutes les
+    polymorphisme, lorsque le programmeur sait que toutes les
     instances ont été déclarées et obtenir une taille de code
     acceptable.
 
@@ -581,7 +581,7 @@ expressive de Scheme.
 
     \subsubsection{Déclaration de fonctions génériques}
       La déclaration est extrêmement simple. Lorsque la macro
-      \texttt{define-generic} est appellée, l'information sur le noms
+      \texttt{define-generic} est appelée, l'information sur le noms
       des paramètres et le nom de la fonction sont conservés dans une
       table de fonctions générique globale (\texttt{meth-table})
       existant durant l'expansion macro. La figure \ref{defgen}
@@ -605,7 +605,7 @@ expressive de Scheme.
     
     \subsubsection{Déclaration d'instances de fonctions génériques}
       Le travail effectué pour la déclaration d'instance est aussi for
-      simple. Il ne suffi qu'a analyser la signature de l'instance
+      simple. Il ne suffit qu'a analyser la signature de l'instance
       donnée afin d'en extraire le type de ses paramètre, et d'ajouter
       une représentation abstraite de la méthode dans la structure
       associée à la fonction générique existant durant l'expansion de
@@ -634,7 +634,7 @@ expressive de Scheme.
                   (else        (error ...))))))
       (else (raise unknown-meth-error))))))
         \end{lstlisting}
-        \caption{Implantation des déclarations d'instancse de
+        \caption{Implantation des déclarations d'instances de
           fonctions génériques}
         \label{defmeth}
       \end{figure}
@@ -645,7 +645,7 @@ expressive de Scheme.
       l'expansion macro. La génération de code ce distingue en 3 étapes:
 
       \begin{enumerate}
-      \item Mise en place des structures qui acceuilleront les
+      \item Mise en place des structures qui accueilleront les
         fonctions génériques.
       \item Insertion des instances de fonctions génériques déclarées
         dans l'endroit correspondant aux types de cet instance.
@@ -679,7 +679,7 @@ expressive de Scheme.
       \end{figure}
       
       Pour la deuxième étape, chacune des instances déclarées seront
-      directement insérées pour les types spécifiés, dans la strucutre
+      directement insérées pour les types spécifiés, dans la structure
       de la fonction générique. Par exemple, la figure
       \ref{ex-insertion-directe-meth} illustre une insertion directe
       d'une instance déclarée de la fonction générique \texttt{f}
@@ -705,11 +705,11 @@ expressive de Scheme.
       fonctionner le polymorphisme, mais le résultat est concluant. En
       résumé, on va placer l'instance la plus appropriée pour un
       tuples de types appartenant au produit cartésiens de toutes les
-      possibilités de sous-types existante pour cette intance. Afin de
+      possibilités de sous-types existante pour cette instance. Afin de
       faire le triage, ou l'ordonnancement pour trouver l'instance la
       plus spécifique, on utilise la même idée que celle décrite dans
       la section \ref{class-order-rel} traitant sur l'ordre relatif
-      entre les classes. La listre triée de l'instnace la plus
+      entre les classes. La liste triée de l'instance la plus
       spécifique à la moins spécifique est renversée de manière à ce
       que l'insertion la plus spécifique soit en \emph{dernier} et
       donc soit effective. Il en résulte donc que non seulement
@@ -717,7 +717,7 @@ expressive de Scheme.
       génère beaucoup de code inutile.
 
       Par contre, nous croyons que ce soit acceptable dans la mesure
-      où la génération du polymorphisme n'est pas appellée
+      où la génération du polymorphisme n'est pas appelée
       souvent. Dans le mode manuel, elle devrait être invoquée une
       seule fois. Dans le mode interactif, elle sera invoquée après
       chaque déclaration d'instance, mais puisque l'utilisateur sera
@@ -766,12 +766,12 @@ expressive de Scheme.
       classes déjà déclarées. Ainsi, chaque champs possède un index
       \emph{unique} dans les descripteurs de classes.
 
-      Ce choix résulte forcémment en de larges descripteurs de classes,
-      surtout lorsrqu'il y a beaucoup de classes ou des classes
+      Ce choix résulte forcément en de larges descripteurs de classes,
+      surtout lorsqu'il y a beaucoup de classes ou des classes
       possédant beaucoup de champs. Par contre, ceci permet d'avoir
       toute la flexibilité désirée pour la création d'instances. 
 
-      Donc, dans le descripteur de classe, à l'index pré-déterminer pour
+      Donc, dans le descripteur de classe, à l'index prédéterminer pour
       un champs donné, on y retrouvera l'index où se trouve ce champs en
       question dans une instance de la classe. On pourra donc avoir des
       instances de taille constante. Le coût de se choix résulte par
@@ -779,7 +779,7 @@ expressive de Scheme.
       (il faut aller chercher où se trouve le champs dans l'instance à
       partir de l'information contenue dans le descripteur de classe).
 
-      Afin d'illustrer ce qui vient d'être énnoncé, l'exemple présenté
+      Afin d'illustrer ce qui vient d'être énoncé, l'exemple présenté
       dans la figure \ref{ex-cdesc} illustre les descripteurs de classes
       créés lorsque le système est \og frais \fg et qu'aucune autre
       classe n'existe au préalable. On constate que par exemple, pour la
@@ -841,7 +841,7 @@ object-system-loaded
       descripteur de classe.
 
       Ainsi, un accès à un champs se fait en temps constant ($\in
-      O(1)$). Il faut parcontre suivre deux indirections: une pour
+      O(1)$). Il faut par contre suivre deux indirections: une pour
       obtenir le descripteur de classe et une seconde par le
       descripteur de classe afin de savoir où se trouve le champs dans
       l'instance. Par contre, l'accès aux champs de classes sont
@@ -874,15 +874,15 @@ object-system-loaded
       \label{genfun-struct}
       Pour chacune des fonctions génériques déclarées, une variable
       globale correspondant à cette fonction générique pointera vers
-      une table de hachage. Cette table sera populée par chacune des
+      une table de hachage. Cette table sera remplie par chacune des
       instances de cette fonction générique. Une liste des types de
-      chaque argument d'une instance sera utilisée comme clée et la
+      chaque argument d'une instance sera utilisée comme clé et la
       valeur correspondra à la fermeture associée.
 
-      Ainsi, lorsque la fonction générique sera appellée via une
+      Ainsi, lorsque la fonction générique sera appelée via une
       méta-fonction, une recherche dans la table sera effectuée et si
       une instance est trouvée selon le type des arguments actuels
-      utilisés, alors cette fermeture sera appellée avec ces arguments
+      utilisés, alors cette fermeture sera appelée avec ces arguments
     
 
 %\clearpage
@@ -892,7 +892,7 @@ object-system-loaded
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Limitations et Travail à Compléter}
   L'implantation du système orienté objet présenté comporte plusieurs
-  limitations quand à son utilisaiton. La principale limitation serait
+  limitations quand à son utilisation. La principale limitation serait
   certainement reliée au fait que le système ne fonctionne pas de
   manière inter-module. Donc il n'est pas possible d'utiliser des
   classes déclarées dans un autre fichier. Nous croyons toutefois
@@ -902,7 +902,7 @@ object-system-loaded
 
   Aussi, le système est peu adapté à des changements dans son
   fonctionnement. En effet, afin d'ajouter des nouvelles
-  fonctionnalitées au système, il faut plonger dans et modifier une
+  fonctionnalités au système, il faut plonger dans et modifier une
   grande partie du code. Ainsi, l'ajout de protocole de méta-objets
   tel que décrit dans \textit{The Art Of The MetaObject
     Protocol}~\cite{AOMOP} serait un grand atout pour le système. Non
@@ -945,7 +945,7 @@ object-system-loaded
   générique se fait en une référence à une table de hachage de test
   \texttt{equal?}.
 
-  Grâce à l'aide d'un algorithme très naif, nous avons réussi à faire
+  Grâce à l'aide d'un algorithme très naïf, nous avons réussi à faire
   un fonctionner le polymorphisme dans notre système de classe à
   héritage multiple. Malgré une complexité élevée et une génération de
   code inutile, nous croyons que le système est utilisable, mais
@@ -964,20 +964,20 @@ object-system-loaded
   \texttt{define-macro} tel que disponible dans Gambit-C.
 
   Nous croyons que l'implantation de ce système objets démontre bien
-  la puissance et l'expressivité du language Scheme. En effet, dans un
+  la puissance et l'expressivité du langage Scheme. En effet, dans un
   délais relativement court (deux à trois semaines), un système objet
   relativement complet, fonctionnel et performant a pu être créé selon
-  des besoins spécifiques. Ainsi, malgré le fait que le language
+  des besoins spécifiques. Ainsi, malgré le fait que le langage
   Scheme est très léger, il peut facilement être adapté, même pour des
-  besoins qui peuvement sembler complexe, voir inaccessibles.
+  besoins qui peuvent sembler complexe, voir inaccessibles.
 
   Il serait très intéressant pour les auteurs de pouvoir maintenant
   ré-écrire tout le système objets, de manière à pouvoir ajouter un
-  protocol de méta-objets et améliorer l'algorithme de génération du
-  polymorphisme. Une ré-écriture complète du système serait
-  probalbement plus enrichissante qu'une modification puisque
+  protocole de méta-objets et améliorer l'algorithme de génération du
+  polymorphisme. Une réécriture complète du système serait
+  probablement plus enrichissante qu'une modification puisque
   l'expérience acquise lors de l'écriture de ce système apporterait
-  beaucoup pour le design lors d'une ré-écriture. Il en résulterait
+  beaucoup pour le design lors d'une réécriture. Il en résulterait
   alors un système très intéressant qui pourrait servir à de nombreux
   programmeurs Scheme.
 
