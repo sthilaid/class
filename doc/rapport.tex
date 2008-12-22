@@ -58,7 +58,10 @@
 
   Ensuite, cette analyse a été utilisé dans l'ajout d'optimisations
   d'évaluations partielles reposant sur le flot des données obtenu
-  précédemment. --- TODO Jeremie ---
+  précédemment. Nous avons ainsi permis au système de beta-réduction
+  d'effectuer des réduction sur le code contenant des paires et des
+  listes constantes. Il nous a aussi été possible de réduire plusieurs
+  test de typages en se servant de l'information que nous obtenions.
 
   Finalement, un système orienté objet polymorphe à héritage multiple,
   à la CLOS, a été écrit en utilisant les macros Scheme. Ce système
