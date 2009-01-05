@@ -21,7 +21,9 @@
 (display "Benchmark suite for the object system")
 (newline)(newline)
 
-;; Slot access benchmark
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;; Slot access benchmark ;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (display "**** Slot access benchmark **** ") (newline)
 (let ((init-t (t))
       (obj (make-B 1 2)))
@@ -42,7 +44,9 @@
 (pp `(oo-system/define-type ratio: ,(/ oo-delay deftype-delay)))
 (newline)
 
-;; Generic function call benchmark
+
+;;;;;;;;;;;;;;;;;;;;;; Generic function call benchmark ;;;;;;;;;;;;;;;;;;;;;;;
+
 (display "**** Generic function call benchmark **** ") (newline)
 (let ((init-t (t))
       (obj (make-B 1 2)))
@@ -62,3 +66,44 @@
 
 (pp `(gen-fun/fun ratio: ,(/ oo-delay deftype-delay)))
 (newline)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;; General usage benchmark ;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define-class point () (slot: x) (slot: y))
+(define-class circle (point) (slot: radius))
+
+(define-class colorfull () (slot: color))
+
+(define-class object () (slot: x) (slot: y) (slot: velocity))
+(define-class apple (colorfull object))
+(define-class ant   (object))
+
+(define-generic (shape obj))
+(define-method  (shape (obj apple))
+  (make-circle (object-x obj) (object-y obj) 4))
+(define-method  (shape (obj ant))
+  (make-point (object-x obj) (object-y obj)))
+
+(define-generic (collision? obj1 obj2))
+(define-method  (collision? (obj1 object) (obj2 object))
+  (collision? (shape obj1) (shape obj2)))
+
+(define (cart-distance p1 p2)
+  (let ((x1 (point-x p1))
+        (y1 (point-y p1))
+        (x2 (point-x p2))
+        (y2 (point-y p2)))
+    (sqrt (+ (expt (- x2 x1)) (+ (expt (- y2 y1)))))))
+(define-method (collision? (obj1 circle) (obj2 circle))
+  (<= (cart-distance obj1 obj2)
+      (+ (circle-radius obj1) (circle-radius obj2))))
+
+(define-method (collision? (obj1 point) (obj2 circle))
+  (<= (cart-distance obj1 obj2)
+      (circle-radius obj2)))
+(define-method (collision? (obj1 circle) (obj2 point))
+  (collision? obj2 obj1))
+
+(define (generate-instances)
+  )
