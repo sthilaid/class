@@ -171,7 +171,7 @@
      (define (find-class? id)
        (table-ref ,(rt-class-table-name) id #f))
 
-     (define (object? obj)
+     (define (instance-object? obj)
        (and (vector? obj)
             (vector? (vector-ref obj 0))
             (symbol? (class-desc-id (vector-ref obj 0)))))
@@ -199,7 +199,7 @@
      ;; FIXME: VERY BAD object verification..
      (define (get-class-id obj)
        (cond
-        ((object? obj)
+        ((instance-object? obj)
          (let ((id (class-desc-id (vector-ref obj 0))))
            ;; this test ensures that its a valid class
            (if (table-ref ,(rt-class-table-name) id #f)
