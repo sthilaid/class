@@ -181,7 +181,7 @@
 ;; The complex sim uses a thread-sleep to simulate some complex
 ;; behaviour that do not use much of the object system
 (define (complex-sim-oo-main)
-  (parameterize ((dyn-behaviour (lambda () (thread-sleep! 0.05)))
+  (parameterize ((dyn-behaviour (lambda () (thread-sleep! 0.005)))
                  (number-of-collisions 0)
                  (all-objects (generate-instances
                                20 make-apple make-ant make-point)))
@@ -189,7 +189,7 @@
         (for-each (lambda (obj) (animate obj))
                   (all-objects)))))
 (define (complex-sim-dt-main)
-  (parameterize ((dyn-behaviour (lambda () (thread-sleep! 0.05)))
+  (parameterize ((dyn-behaviour (lambda () (thread-sleep! 0.005)))
                  (number-of-collisions 0)
                  (all-objects (generate-instances
                                20 make-dt-apple make-dt-ant make-dt-point)))

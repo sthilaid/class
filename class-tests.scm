@@ -8,7 +8,7 @@
 (load "test.scm")
 (set-iterative-method-developpement!)
 
-(pp (lambda () (define-class A ()      (slot: a) (class-slot: csa))))
+;; (pp (lambda () (define-class A ()      (slot: a) (class-slot: csa))))
 (define-class A ()      (slot: a) (class-slot: csa))
 (define-class B (A)     (slot: b))
 (define-class C ()      (slot: c))
@@ -53,15 +53,28 @@
     (display (E-e obj)))
   'ok)
 
-(define-test simple-class-slots "1234" 'ok
+(define-test simple-class-slots "12333allo44allo7allo7toto" 'ok
   (let ((obj1 (make-A 1))
-        (obj2 (make-A 2)))
+        (obj2 (make-A 2))
+        (obj3 (make-B 5 6)))
     (A-csa-set! 3)
+    (B-csa-set! 'allo)
     (display (A-a obj1))
     (display (A-a obj2))
     (display (A-csa))
+    (display (A-csa obj1))
+    (display (A-csa obj2))
+    (display (A-csa obj3))
     (A-csa-set! 4)
-    (display (A-csa)))
+    (display (A-csa))
+    (display (A-csa obj1))
+    (display (A-csa obj3))
+    (A-csa-set! obj1 7)
+    (display (A-csa obj1))
+    (display (A-csa obj3))
+    (A-csa-set! obj3 'toto)
+    (display (A-csa obj1))
+    (display (A-csa obj3)))
   'ok)
 
 (define-test test-generic-simple "10dix" 'ok

@@ -161,6 +161,8 @@
 
 (define-macro (init-rt)
   `(begin
+     (define (class-descriptor obj)
+       (vector-ref obj 0))
      (define (class-desc-id desc) (vector-ref desc 0))
      (define (class-desc-supers desc) (vector-ref desc 1))
      (define (class-desc-indices-vect desc) (vector-ref desc 2))
@@ -173,8 +175,8 @@
 
      (define (instance-object? obj)
        (and (vector? obj)
-            (vector? (vector-ref obj 0))
-            (symbol? (class-desc-id (vector-ref obj 0)))))
+            (vector? (class-descriptor obj))
+            (symbol? (class-desc-id (class-descriptor obj)))))
 
      (define (cast obj type)
        ;; from scm-lib
@@ -200,7 +202,7 @@
      (define (get-class-id obj)
        (cond
         ((instance-object? obj)
-         (let ((id (class-desc-id (vector-ref obj 0))))
+         (let ((id (class-desc-id (class-descriptor obj))))
            ;; this test ensures that its a valid class
            (if (table-ref ,(rt-class-table-name) id #f)
                id
@@ -222,7 +224,7 @@
          new-obj))
 
      (define (instance-of? obj class-id)
-       (eq? (vector-ref obj 0)
+       (eq? (class-descriptor obj)
             (table-ref ,(rt-class-table-name) class-id (gensym))))
 
      (define (is-subclass? class-id super-id)
@@ -299,31 +301,38 @@
   (define (gen-accessors field-indices)
     (define (gen-accessor field slot-info)
       (let* ((index (slot-index slot-info))
-             (read-hooks (slot-read-hooks? slot-info))
-             (slot-access
-              (cond ((is-class-slot? slot-info)
-                     `(vector-ref ,(class-desc-name name) ,index))
-                    ((is-instance-slot? slot-info)
-                     `(vector-ref ,obj
-                                  (vector-ref (vector-ref ,obj 0) ,index)))
-                    (else (error "gen-accesors: unknown class slot"))))
-             (signature
-              (cond ((is-class-slot? slot-info)
-                     `(,(gen-accessor-name name field)))
-                    ((is-instance-slot? slot-info)
-                     `(,(gen-accessor-name name field) ,obj))))
-             (hook-call
-              (cond ((is-class-slot? slot-info)
-                     `(hook slot-value))
-                    ((is-instance-slot? slot-info)
-                     `(hook ,obj slot-value)))))
-        `(define ,signature
-           ,(if read-hooks
-                `(let ((slot-value ,slot-access))
-                   (for-each (lambda (hook) ,hook-call)
-                             (list ,@read-hooks))
-                   slot-value)
-                slot-access))))
+             (read-hooks (slot-read-hooks? slot-info)))
+        (cond ((is-class-slot? slot-info)
+               (let ((hook-call `(hook slot-value))
+                     (direct-slot-access
+                      `(vector-ref ,(class-desc-name name) ,index))
+                     (indirect-slot-access
+                            `(vector-ref (class-descriptor ,obj) ,index)))
+                 ;; An optional argument which must be an instance can
+                 ;; be given. If this argument is present, then a
+                 ;; dynamic fetch of the class field will be made.
+                 `(define (,(gen-accessor-name name field) #!optional (,obj #f))
+                    (let ((slot-access
+                           (if ,obj ,indirect-slot-access ,direct-slot-access)))
+                     ,(if read-hooks
+                          `(let ((slot-value slot-access))
+                             (for-each (lambda (hook) ,hook-call)
+                                       (list ,@read-hooks))
+                             slot-value)
+                          'slot-access)))))
+              ((is-instance-slot? slot-info)
+               (let ((hook-call `(hook ,obj slot-value))
+                     (slot-access
+                      `(vector-ref ,obj
+                                   (vector-ref (class-descriptor ,obj)
+                                               ,index))))
+                 `(define (,(gen-accessor-name name field) ,obj)
+                    ,(if read-hooks
+                         `(let ((slot-value ,slot-access))
+                            (for-each (lambda (hook) ,hook-call)
+                                      (list ,@read-hooks))
+                            slot-value)
+                         slot-access)))))))
     ;; Generate a list of all the accesssors
     (if (not (pair? field-indices))
         '()
@@ -335,32 +344,40 @@
   (define (gen-setters field-indices)
     (define (gen-setter field slot-info)
       (let* ((index (slot-index slot-info))
-             (write-hooks (slot-write-hooks? slot-info))
-             (slot-set!
-              (cond ((is-class-slot? slot-info)
-                     `(vector-set! ,(class-desc-name name) ,index ,val))
-                    ((is-instance-slot? slot-info)
-                     `(vector-set! ,obj
-                                   (vector-ref (vector-ref ,obj 0) ,index)
-                                   ,val))
-                    (else (error "gen-setters: unknown class slot"))))
-             (signature
-              (cond ((is-class-slot? slot-info)
-                     `(,(gen-setter-name name field) ,val))
-                    ((is-instance-slot? slot-info)
-                     `(,(gen-setter-name name field) ,obj ,val))))
-             (hook-call
-              (cond ((is-class-slot? slot-info)
-                     `(hook ,val))
-                    ((is-instance-slot? slot-info)
-                     `(hook ,obj ,val)))))
-        ;; (define (blabla ... ,val) ...)
-        `(define ,signature
-           ,(if write-hooks
-                `(begin (for-each (lambda (hook) ,hook-call)
-                                  (list ,@write-hooks))
-                        ,slot-set!)
-                slot-set!))))
+             (write-hooks (slot-write-hooks? slot-info)))
+        (cond ((is-class-slot? slot-info)
+               (let ((hook-call `(hook ,val))
+                     (direct-slot-set!
+                      `(vector-set! ,(class-desc-name name) ,index ,val))
+                     (indirect-slot-set!
+                      `(vector-set! (class-descriptor ,obj) ,index ,val)))
+                 `(define (,(gen-setter-name name field)
+                           ,obj
+                           #!optional (val? #f))
+                    (let* ((,val (if val? val? ,obj))
+                           (slot-set! (if val?
+                                          ,indirect-slot-set!
+                                          ,direct-slot-set!)))
+                      ,(if write-hooks
+                           `(begin (for-each (lambda (hook) ,hook-call)
+                                             (list ,@write-hooks))
+                                   slot-set!)
+                           'slot-set!)))))
+              ((is-instance-slot? slot-info)
+               (let ((hook-call `(hook ,obj ,val))
+                     (slot-set!
+                      `(vector-set!
+                        ,obj
+                        (vector-ref (class-descriptor ,obj) ,index)
+                        ,val)))
+                 `(define (,(gen-setter-name name field) ,obj ,val)
+                    ,(if write-hooks
+                         `(begin (for-each (lambda (hook) ,hook-call)
+                                           (list ,@write-hooks))
+                                 ,slot-set!)
+                         slot-set!))))
+              (else (error "gen-setters: unknown class slot")))))
+    
     ;; Generate a list of all the setters
     (if (not (pair? field-indices))
         '()
@@ -433,7 +450,7 @@
     `(begin
        ;; Class descriptor is put in a global var
        (define (,(gen-predicate-name name) ,obj)
-         (is-subclass? (class-desc-id (vector-ref ,obj 0))
+         (is-subclass? (class-desc-id (class-descriptor ,obj))
                        ',name))))
 
   (define (gen-printfun field-indices)
