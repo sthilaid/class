@@ -40,11 +40,12 @@
       (define (macro-is-subclass? class-id super-id)
         ;; Warning: This might return true even if its not a subclass if
         ;; an old superclass as been redefined...
-        (or (and (eq? class-id super-id) class-id)
-            (memq super-id
-                  (class-desc-supers (class-info-desc
-                                      (table-ref class-table class-id))))
-            (eq? super-id any-type)))
+        (and (not (eq? class-id 'any-type))
+             (or (and (eq? class-id super-id) class-id)
+                 (memq super-id
+                       (class-desc-supers (class-info-desc
+                                           (table-ref class-table class-id))))
+                 (eq? super-id any-type))))
 
 
       ;;;;;;;;;;;;;;; Naming convention abstractions ;;;;;;;;;;;;;;;
@@ -238,11 +239,13 @@
             (table-ref ,(rt-class-table-name) class-id (gensym))))
 
      (define (is-subclass? class-id super-id)
-       (or (and (eq? class-id super-id) class-id)
-           (memq super-id
-                 (class-desc-supers
-                  (table-ref ,(rt-class-table-name) class-id)))
-           (eq? super-id 'any-type)))
+       (and (not (eq? class-id 'any-type))
+            (or (and (eq? class-id super-id) class-id)
+                (eq? super-id 'any-type)
+                (memq super-id
+                      (class-desc-supers
+                       (table-ref ,(rt-class-table-name) class-id))))))
+     
 
      ;; Will find the "best" or most specific instance of the generic
      ;; function genfun that corresponds to the actual parameter's types
