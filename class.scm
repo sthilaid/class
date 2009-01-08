@@ -265,26 +265,31 @@
 
      (define (find-polymorphic-instance? genfun types)
        (define (get-super-numbers type)
-         (length (class-desc-supers (find-class type))))
+         (if (eq? type 'any-type)
+             0
+             (length (class-desc-supers (find-class? type)))))
 
        (define (method-comparator fun)
          (lambda (m1 m2)
            (fun (apply + (map get-super-numbers (method-types m1)))
                 (apply + (map get-super-numbers (method-types m2))))))
 
+       
+       (define (sort-methods method-lst)
+         (reverse (quick-sort (method-comparator <)
+                              (method-comparator =)
+                              (method-comparator >)
+                              method-lst)))
+
        (define (equivalent-types? instance-types param-types)
          (if (pair? instance-types)
              (and (is-subclass? (car param-types) (car instance-types))
-                  (equivalent-types? (cdr param-types) (cdr instance-types)))
+                  (equivalent-types? (cdr instance-types) (cdr param-types)))
              #t))
-       
-       (define (sort-methods method-lst)
-         (quick-sort (method-comparator <)
-                     (method-comparator =)
-                     (method-comparator >)
-                     method-lst))
+
        (let ((sorted-instances (sort-methods
                                 (generic-function-instances-list genfun))))
+;;          (pp `(sorted instances: ,(map method-types sorted-instances)))
          (exists (lambda (method) (equivalent-types? (method-types method)
                                                      types))
                  sorted-instances)))
@@ -603,7 +608,7 @@
                      (with-output-to-string
                        ""
                        (lambda ()
-                         (pretty-print `(,,name ,@types)))))))))))))
+                         (pretty-print `(,',name ,@types)))))))))))))
 
 
 
