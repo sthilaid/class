@@ -1,24 +1,5 @@
 ;; Very simple object system which focuses on runtime speed.
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Expansion context setup
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; these 2 macros sets up the context in which the class system is
-;; used. If the iterative-method-dev is chosen (default), the generic
-;; function (polymorphism) are reset at each new method definition,
-;; which enables iterative developpement in a repl. This is not
-;; suitable for compiled code (exploses the code size), so the manual
-;; mode lets the user decide when to generate the methods with a
-;; manual call to (setup-generic-functions!) in the user code.
-;;
-;; These macros should be called just after including this file.
-
-(define-macro (set-iterative-method-developpement!)
-  (set! mode 'iterative))
-
-(define-macro (set-manual-method-developpement!)
-  (set! mode 'manual))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -263,6 +244,8 @@
                   (table-ref ,(rt-class-table-name) class-id)))
            (eq? super-id 'any-type)))
 
+     ;; Will find the "best" or most specific instance of the generic
+     ;; function genfun that corresponds to the actual parameter's types
      (define (find-polymorphic-instance? genfun types)
        (define (get-super-numbers type)
          (if (eq? type 'any-type)
@@ -289,7 +272,6 @@
 
        (let ((sorted-instances (sort-methods
                                 (generic-function-instances-list genfun))))
-;;          (pp `(sorted instances: ,(map method-types sorted-instances)))
          (exists (lambda (method) (equivalent-types? (method-types method)
                                                      types))
                  sorted-instances)))
@@ -327,7 +309,7 @@
     (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
   (define-macro (to-string e1 . es)
     `(with-output-to-string "" (lambda () ,e1 ,@es)))
-  ;; todo
+
   ;; puts the fields into the temp table. The class fields MUST be
   ;; processed AFTER that the super class's fields where processed.
   (define (process-field! field)
@@ -577,10 +559,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (define-generic signature)
-  (define (show . args)
-    (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
-  (define-macro (to-string e1 . es)
-    `(with-output-to-string "" (lambda () ,e1 ,@es)))
   (define name (meth-name signature))
   (define (parse-arg arg)
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
