@@ -60,10 +60,9 @@
         ;; Warning: This might return true even if its not a subclass if
         ;; an old superclass as been redefined...
         (or (and (eq? class-id super-id) class-id)
-            (exists (lambda (class-super)
-                      (macro-is-subclass? class-super super-id))
-                    (class-desc-supers (class-info-desc
-                                        (table-ref class-table class-id))))
+            (memq super-id
+                  (class-desc-supers (class-info-desc
+                                      (table-ref class-table class-id))))
             (eq? super-id any-type)))
 
 
@@ -97,9 +96,16 @@
       
       (define (make-class-desc id supers num-fields)
         ;; add 2 to include place holders for the id and supers
-        (let ((desc (make-vector (+ num-fields 2) 'unknown-slot)))
+        (let ((desc (make-vector (+ num-fields 2) 'unknown-slot))
+              (all-supers
+               (apply generic-multi-union eq?
+                      supers
+                      (map (lambda (s) (class-desc-supers
+                                        (class-info-desc
+                                         (table-ref class-table s))))
+                           supers))))
           (vector-set! desc 0 id)
-          (vector-set! desc 1 supers)
+          (vector-set! desc 1 all-supers)
           desc))
       (define (class-desc-id desc) (vector-ref desc 0))
       (define (class-desc-supers desc) (vector-ref desc 1))
@@ -131,21 +137,20 @@
           (if hooks (cdr hooks) #f)))
         
       (define (make-generic-function name args)
-        (vector name args '()))
+        (vector name args (make-table test: equal?)))
       (define (generic-function-name gf) (vector-ref gf 0))
       (define (generic-function-args gf) (vector-ref gf 1))
       (define (generic-function-instances gf) (vector-ref gf 2))
       (define (generic-function-instances-add! gf instance)
-        (let ((instances (generic-function-instances gf))
-              (inst-comparator (lambda (i1 i2)
-                                 (equal? (method-types i1)
-                                         (method-types i2)))))
-          (if (generic-member inst-comparator instance instances)
-              (vector-set! gf 2 (cons instance
-                                      (list-remove inst-comparator
-                                                   instance
-                                                   instances)))
-              (vector-set! gf 2 (cons instance instances)))))
+        (table-set! (generic-function-instances gf)
+                    (method-types instance)
+                    instance))
+      (define (generic-function-instances-list gf)
+        (table->list (generic-function-instances gf)))
+      (define (generic-function-get-instance gf types)
+        (table-ref (generic-function-instances gf) types #f))
+      (define (generic-function-instances-number gf)
+        (table-length (generic-function-instances gf)))
       
       
       (define make-method vector) ; (make-method id types body)
@@ -161,11 +166,35 @@
 
 (define-macro (init-rt)
   `(begin
-     (define (class-descriptor obj)
-       (vector-ref obj 0))
-     (define (class-desc-id desc) (vector-ref desc 0))
-     (define (class-desc-supers desc) (vector-ref desc 1))
+     ;; FIXME: Copy/pasted code from the macro time section above :(!!
+     (define (class-descriptor obj) (vector-ref obj 0))
+     (define (class-desc-id desc)           (vector-ref desc 0))
+     (define (class-desc-supers desc)       (vector-ref desc 1))
      (define (class-desc-indices-vect desc) (vector-ref desc 2))
+
+     (define (make-generic-function name args)
+        (vector name args (make-table test: equal?)))
+      (define (generic-function-name gf) (vector-ref gf 0))
+      (define (generic-function-args gf) (vector-ref gf 1))
+      (define (generic-function-instances gf) (vector-ref gf 2))
+      (define (generic-function-instances-add! gf instance)
+        (table-set! (generic-function-instances gf)
+                    (method-types instance)
+                    instance))
+      (define (generic-function-instances-list gf)
+        (##table-foldl rcons '() (lambda (k v) v)
+                       (generic-function-instances gf)))
+      (define (generic-function-get-instance gf types)
+        (table-ref (generic-function-instances gf) types #f))
+      (define (generic-function-instances-number gf)
+        (table-length (generic-function-instances gf)))
+     
+     (define make-method vector) ; (make-method id types body)
+     (define (method-id meth) (vector-ref meth 0))
+     (define (method-types meth) (vector-ref meth 1))
+     (define (method-body meth) (vector-ref meth 2))
+     ;; FIXME-END ;;
+     
 
      ;; Runtime class table
      (define ,(rt-class-table-name) (make-table test: eq?))
@@ -228,13 +257,38 @@
             (table-ref ,(rt-class-table-name) class-id (gensym))))
 
      (define (is-subclass? class-id super-id)
-       ;; Warning: This might return true even if its not a subclass if
-       ;; an old superclass as been redefined...
        (or (and (eq? class-id super-id) class-id)
-           (exists (lambda (class-super) (is-subclass? class-super super-id))
-                   (class-desc-supers
-                    (table-ref ,(rt-class-table-name) class-id)))
+           (memq super-id
+                 (class-desc-supers
+                  (table-ref ,(rt-class-table-name) class-id)))
            (eq? super-id 'any-type)))
+
+     (define (find-polymorphic-instance? genfun types)
+       (define (get-super-numbers type)
+         (length (class-desc-supers (find-class type))))
+
+       (define (method-comparator fun)
+         (lambda (m1 m2)
+           (fun (apply + (map get-super-numbers (method-types m1)))
+                (apply + (map get-super-numbers (method-types m2))))))
+
+       (define (equivalent-types? instance-types param-types)
+         (if (pair? instance-types)
+             (and (is-subclass? (car param-types) (car instance-types))
+                  (equivalent-types? (cdr param-types) (cdr instance-types)))
+             #t))
+       
+       (define (sort-methods method-lst)
+         (quick-sort (method-comparator <)
+                     (method-comparator =)
+                     (method-comparator >)
+                     method-lst))
+       (let ((sorted-instances (sort-methods
+                                (generic-function-instances-list genfun))))
+         (exists (lambda (method) (equivalent-types? (method-types method)
+                                                     types))
+                 sorted-instances)))
+     
 
      (define-generic (describe obj))
 
@@ -249,12 +303,6 @@
                              (transformer obj)
                              obj)))))
          (set! ##wr new-wr)))
-
-     #;
-     (define-class class ()
-       (slot: name)
-       (slot: supers)
-       )
 
      'object-system-loaded
      ))
@@ -533,26 +581,29 @@
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
            (car arg))
           (else arg)))
-  (define (args) (map parse-arg (cdr signature)))
   
-  (table-set! meth-table name (make-generic-function name (args)))
-  ''ok
-  #;
-  `(begin
-     (define ,(gen-method-table-name name) (make-table test: equal?))
-     (define (,name ,@(args))
-       (let ((types (map get-class-id (list ,@(args)))))
-         (cond
-          ((table-ref ,(gen-method-table-name name) types #f)
-           => (lambda (method) (method ,@(args))))
-          (else
-           (error (string-append "Unknown method: "
-                                 (with-output-to-string
-                                   ""
-                                   (lambda ()
-                                     (pretty-print `(,,name ,@types))))))))))))
-
-
+  (let ((args (map parse-arg (cdr signature))))
+    (table-set! meth-table name (make-generic-function name args))
+    `(begin
+       (define ,(gen-method-table-name name)
+         (make-generic-function ',name ',args))
+       (define (,name ,@args)
+         (let ((types (map get-class-id (list ,@args))))
+           (cond
+            ((or (table-ref (generic-function-instances
+                             ,(gen-method-table-name name)) types #f)
+                 (find-polymorphic-instance? ,(gen-method-table-name name)
+                                             types))
+             => (lambda (method)
+                  (apply (method-body method)
+                         (map uncast ,(cons 'list args)))))
+            (else
+             (error (string-append
+                     "Unknown method: "
+                     (with-output-to-string
+                       ""
+                       (lambda ()
+                         (pretty-print `(,,name ,@types)))))))))))))
 
 
 
@@ -587,144 +638,11 @@
                   (generic-function-instances-add!
                    gen-fun
                    (make-method (name) types `(lambda ,args ,bod ,@bods)))
-                  (case mode
-                   ((iterative) '(setup-generic-functions!))
-                   ((manual)    ''ok)
-                   (else        (error "unknown method expansion mode."))))))
+                  `(generic-function-instances-add!
+                    ,(gen-method-table-name (name))
+                    (make-method ',(name) ',types
+                                 (lambda ,args ,bod ,@bods))))))
       (else (raise unknown-meth-error))))))
-
-(define-macro (setup-generic-functions!)
-  (define all-generic-functions (map cdr (table->list meth-table)))
-  `(begin
-     ;; Setup the tables and meta-functions that will search for the
-     ;; appropriate generic function instance. The search should be in
-     ;; about O(1) since its just a lookup into a pre-calculated table.
-     ,@(map
-        (lambda (gen-fun)
-          (let ((name (generic-function-name gen-fun))
-                (args (generic-function-args gen-fun)))
-           `(begin
-              (define ,(gen-method-table-name name) (make-table test: equal?))
-              (define (,name ,@args)
-                (let ((types (map get-class-id (list ,@args))))
-                  (cond
-                   ((table-ref ,(gen-method-table-name name) types #f)
-                    => (lambda (method)
-                         (apply method (map uncast ,(cons 'list args)))))
-                   (else
-                    (error (string-append
-                            "Unknown method: "
-                            (with-output-to-string
-                              ""
-                              (lambda ()
-                                (pretty-print `(,,name ,@types)))))))))))))
-        all-generic-functions)
-     
-     ;; Insert the declared generic functions into their respective tables
-     (begin
-       ,@(map (lambda (gen-fun)
-                (let ((name (generic-function-name gen-fun))
-                      (instances (generic-function-instances gen-fun)))
-                  `(begin
-                     ,@(map (lambda (method)
-                              `(table-set! ,(gen-method-table-name name)
-                                           ',(method-types method)
-                                           ,(method-body method)))
-                            instances))))
-              all-generic-functions))
-
-     (begin 'DEGUG--begin-of-polymorphing!--) ;; DEBUGING
-     
-     ;; Insert the most specific generic function instance for all
-     ;; possible of valid type combinations for the arguments. (not
-     ;; efficient, but made at compile time).
-     (polymorphize-methods!)
-
-     ;; remove because it is not portable code...
-     #;
-     (add-pp-method!
-      (lambda (obj) (not (eq? (get-class-id obj) 'any-type)))
-      describe)))
-
-
-
-
-(define-macro (polymorphize-methods!)
-  (define (find-sub-classes class-id)
-    (filter (lambda (current-class)
-              (macro-is-subclass? current-class class-id))
-            (map car (table->list class-table) )))
-
-  (define (find-super-classes class-id)
-    (filter (lambda (current-class)
-              (macro-is-subclass? class-id current-class))
-            (map car (table->list class-table))))
-
-  (define (get-super-numbers class-id)
-    (if (eq? class-id any-type)
-        0
-        (length
-         (apply generic-multi-union
-                eq?
-                (map find-super-classes
-                     (class-desc-supers (class-info-desc
-                                         (table-ref class-table class-id))))))))
-  
-  (define (class-comparator fun)
-    (lambda (c1 c2)
-      (fun (get-super-numbers c1) (get-super-numbers c2))))
-
-  (define (sort-class-specific-order class-lst)
-    (quick-sort (class-comparator <) (class-comparator =) (class-comparator >)
-                class-lst))
-
-  ;; FIXME: This comparator will certainly lead to strange ordering
-  ;; with complicated hierarchy. This is just a temporary fix...
-  (define (method-comparator fun)
-    (lambda (m1 m2)
-      (fun (apply + (map get-super-numbers (method-types m1)))
-           (apply + (map get-super-numbers (method-types m2))))))
-  
-  (define (sort-methods method-lst)
-    (quick-sort (method-comparator <)
-                (method-comparator =)
-                (method-comparator >)
-                method-lst))
-  
-  (load "scm-lib.scm")
-
-  ;; runtime generated code that will insert the most specific method
-  ;; instance for subclasses without generic method instances.
-  `(begin
-     ,@(apply
-        reverse-append
-        (map
-         (lambda (gen-method)
-           (let ((gen-meth-name (generic-function-name gen-method))
-                 (gen-meth-instances (generic-function-instances gen-method)))
-             (apply
-              reverse-append
-              (map
-               (lambda (method)
-                 (map
-                  (lambda (possible-types)
-                    (if (not (exists (lambda (m) (equal? possible-types
-                                                         (method-types m)))
-                                     gen-meth-instances))
-                        `(table-set! ,(gen-method-table-name gen-meth-name)
-                                     ',possible-types
-                                     ,(method-body method))
-                        ''nothing-to-add))
-                  (apply cartesian-product
-                         (map find-sub-classes (method-types method)))))
-               ;; Must reverse the list because of the reverse-append
-               ;; calls! The order of the table-set! are important as
-               ;; the one with the most specific instance should
-               ;; appear last!
-               (reverse (sort-methods gen-meth-instances))))))
-         ;; filter the empty genric functions (with no instances)
-         (filter (lambda (m) (not (null? (generic-function-instances m))))
-                 (map cdr (table->list meth-table)))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

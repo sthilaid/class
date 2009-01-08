@@ -205,4 +205,4 @@
     (hooked-cs)
     'ok))
 
-;; (pp (lambda () (setup-generic-functions!)))
+(pp (lambda () (setup-generic-functions!)))

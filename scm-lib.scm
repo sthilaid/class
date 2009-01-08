@@ -44,13 +44,35 @@
                          (symbol->string s1)
                          (map symbol->string ss))))
 
+
+
+;;;;;;;;;;;;;;;;;;;;;;; High Order Functions ;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define (flip f x)
+  (lambda (y) (f y x)))
+
+(define (curry-flip f)
+  (lambda (x) (lambda (y) ((f y) x))))
+
 ;;;;;;;;;;;;;;;;;;;;;;; list operations ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define (make-list number thunk)
+(define (create-list number thunk)
   (let loop ((n number) (acc '()))
     (if (> n 0)
         (loop (- n 1) (cons (thunk) acc))
         acc)))
+
+(define (create-vector number thunk)
+  (create-vector-param number (lambda (_) (thunk))))
+
+(define (create-vector-param number fn)
+  (define v (make-vector number #f))
+  (let loop ((n (- number 1)))
+    (if (>= n 0)
+        (begin
+          (vector-set! v n (fn n))
+          (loop (- n 1)))
+        v)))
 
 (define (rcons x y) (cons y x))
 
@@ -103,6 +125,13 @@
       acc
       (fold-l f (f acc (car list)) (cdr list))))
 
+;; Loosy error check. Assumes all list have same size and that at
+;; least 1 list is used.
+(define (multi-fold-l f acc . lists)
+  (if (not (pair? (car lists)))
+      acc
+      (apply multi-fold-l f (apply f acc (map car lists)) (map cdr lists))))
+
 (define (cleanse lst)
   (cond
    ((not (pair? lst)) '())
@@ -121,6 +150,14 @@
   (fold-l (lambda (acc-set set) (generic-union comp acc-set set))
           '()
           ls))
+
+(define (generic-intersection comparator l1 l2)
+  (let loop ((l1 l1) (acc '()))
+    (if (not (pair? l1))
+        acc
+        (if (generic-member comparator (car l1) l2)
+            (loop (cdr l1) (cons (car l1 acc)))
+            (loop (cdr l1) acc)))))
 
 ;; Returns the cartesian products of multiple sets.
 ;; eg: (cartesian-product '(a b) '(c d) '(e f))
@@ -264,8 +301,15 @@
   (define data '())
   (define SMA 'N/A)
   (define current-mode #f)
+  (define max -inf.0)
+  (define min +inf.0)
+
+  (define (check-extremum! val)
+    (cond ((< val min) (set! min val))
+          ((> val max) (set! max val))))
   
   (define (gather-init-data new-val)
+    (check-extremum! new-val)
     (set! data (cons new-val data))
     (set! SMA (average data))
     (if (>= (length data) bound)
@@ -273,15 +317,21 @@
     SMA)
   
   (define (sma-calculator new-val)
+    (check-extremum! new-val)
     (set! data (cons new-val (drop-right data 1)))
     (set! SMA (average data))
     SMA)
   
   (define (dispatcher . arg)
-    (if (not (pair? arg))
-        SMA
-        (current-mode (car arg))))
-
+    (cond
+     ((not (pair? arg))   SMA)
+     ((number? (car arg)) (current-mode (car arg)))
+     ((symbol? (car arg)) (case (car arg)
+                            ((min) min)
+                            ((max) max)
+                            ((avg) SMA)
+                            (else SMA)))))
+  
   (set! current-mode gather-init-data)
   dispatcher)
 
@@ -325,6 +375,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;; Data Structures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+;;; Stack
 (define (new-stack) (cons '() #f))
 (define stack->list car)
 (define (empty-stack? stack) (null? (stack->list stack)))
@@ -352,9 +403,7 @@
 
 
 
-
-
-;; Queue implementation
+;;; Queue implementation
 (define (new-queue) (cons '() '()))
 (define queue-list car)
 (define queue-list-set! set-car!)
@@ -386,6 +435,36 @@
 (define (queue-find-obj? q predicate)
   (exists predicate (queue-list q)))
 
+
+
+;;; Sets
+(define (empty-set) '())
+(define (empty-set? set) (eq? set '()))
+(define (set-add comp el set)
+  (if (generic-member comp el set)
+      set
+      (cons el set)))
+(define (set-remove comp el set)
+  (list-remove comp el set))
+
+(define (set-union comp set1 set2)
+  (generic-union comp set1 set2))
+
+(define (set-intersection comp set1 set2)
+  (generic-intersection comp set1 set2))
+
+(define (set-substract comp set1 set2)
+  (fold-l (lambda (acc x) (set-remove comp x acc))
+          set1
+          set2))
+
+(define (set-element? comp elem set)
+  (generic-member comp elem set))
+
+(define (list->set comp list)
+  (fold-l (lambda (set el) (set-add comp el set))
+          (empty-set)
+          list))
 
 ;; Randomize current mrg's seed
 (random-source-randomize! default-random-source)
