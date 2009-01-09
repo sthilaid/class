@@ -6,7 +6,6 @@
 (include "class.scm")
 (load "scm-lib.scm")
 (load "test.scm")
-(set-iterative-method-developpement!)
 
 ;; (pp (lambda () (define-class A ()      (slot: a) (class-slot: csa))))
 (define-class A ()      (slot: a) (class-slot: csa))
@@ -35,9 +34,6 @@
 (define-generic (h x y))
 (define-method (h x y) x)
 (define-method (h (x A) (y A)) (A-a x))
-
-;; (setup-generic-functions!)
-
 
 (define-test simple-instance-slots "aaabbccdde" 'ok
   (let ((obj (make-E 'a 'b 'c 'd 'e)))
@@ -82,6 +78,15 @@
   (display (test (make-B 10 'dix)))
   'ok)
 
+(define-test test-generic-redefinition "toto!titi!" 'ok
+  (let ((a (make-A 10)))
+    (define-generic (toto obj))
+    (define-method (toto (obj A)) 'toto!)
+    (display (toto a))
+    (define-method (toto (obj A)) 'titi!)
+    (display (toto a))
+    'ok))
+
 ;; Testing that the generic function test is correctly "polymorphised"
 ;; such that when calling it with some object instances that have no
 ;; direct equivalent instance, the most specific found is used.
@@ -102,7 +107,7 @@
     (display (test2 a b))
     (display (test2 b b))
     (display (test2 e e))
-    (display (test2 a e)))
+    (display (test2 a d)))
   'ok)
 
 (define-test test-predicate-simple "yesno" 'ok

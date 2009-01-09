@@ -65,7 +65,6 @@
       (define (gen-method-table-name name)
         (symbol-append name '-meth-table))
 
-      (define (rt-class-table-name) 'rt-class-table)
       
 
 
@@ -140,162 +139,6 @@
       (define (method-types meth) (vector-ref meth 1))
       (define (method-body meth) (vector-ref meth 2)))
    ))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Runtime lib
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(define-macro (init-rt)
-  `(begin
-     ;; FIXME: Copy/pasted code from the macro time section above :(!!
-     (define (class-descriptor obj) (vector-ref obj 0))
-     (define (class-desc-id desc)           (vector-ref desc 0))
-     (define (class-desc-supers desc)       (vector-ref desc 1))
-     (define (class-desc-indices-vect desc) (vector-ref desc 2))
-
-     (define (make-generic-function name args)
-        (vector name args (make-table test: equal?)))
-      (define (generic-function-name gf) (vector-ref gf 0))
-      (define (generic-function-args gf) (vector-ref gf 1))
-      (define (generic-function-instances gf) (vector-ref gf 2))
-      (define (generic-function-instances-add! gf instance)
-        (table-set! (generic-function-instances gf)
-                    (method-types instance)
-                    instance))
-      (define (generic-function-instances-list gf)
-        (##table-foldl rcons '() (lambda (k v) v)
-                       (generic-function-instances gf)))
-      (define (generic-function-get-instance gf types)
-        (table-ref (generic-function-instances gf) types #f))
-      (define (generic-function-instances-number gf)
-        (table-length (generic-function-instances gf)))
-     
-     (define make-method vector) ; (make-method id types body)
-     (define (method-id meth) (vector-ref meth 0))
-     (define (method-types meth) (vector-ref meth 1))
-     (define (method-body meth) (vector-ref meth 2))
-     ;; FIXME-END ;;
-     
-
-     ;; Runtime class table
-     (define ,(rt-class-table-name) (make-table test: eq?))
-
-     (define (find-class? id)
-       (table-ref ,(rt-class-table-name) id #f))
-
-     (define (instance-object? obj)
-       (and (vector? obj)
-            (vector? (class-descriptor obj))
-            (symbol? (class-desc-id (class-descriptor obj)))))
-
-     (define (cast obj type)
-       ;; from scm-lib
-       (define (show . args)
-         (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
-       (define-macro (to-string e1 . es)
-         `(with-output-to-string "" (lambda () ,e1 ,@es)))
-       (let ((class-id (get-class-id obj)))
-        (if (is-subclass? class-id type)
-            (vector cast: obj type)
-            (error
-             (to-string (show "Cannot perform cast: "
-                              class-id " is not a sublclass of " type))))))
-     (define (cast? obj)
-       (and (vector? obj)
-            (eq? (vector-ref obj 0) cast:)
-            (= (vector-length obj) 3)))
-     (define (cast-obj  c) (vector-ref c 1))
-     (define (cast-type c) (vector-ref c 2))
-     (define (uncast obj) (if (cast? obj) (cast-obj obj) obj))
-       
-     ;; FIXME: VERY BAD object verification..
-     (define (get-class-id obj)
-       (cond
-        ((instance-object? obj)
-         (let ((id (class-desc-id (class-descriptor obj))))
-           ;; this test ensures that its a valid class
-           (if (table-ref ,(rt-class-table-name) id #f)
-               id
-               'any-type)))
-        ((cast? obj) (cast-type obj))
-        (else 'any-type)))
-
-     ;; This produces a "light" copy because the fiels are simply
-     ;; copied by value, not deeply replicated. Thus a pointer to a
-     ;; data structure will be copied as a pointer to the same data
-     ;; structure.
-     (define (object-light-copy obj)
-       (let* ((len (vector-length obj))
-              (new-obj (make-vector len #f)))
-         (let loop ((i 0))
-           (if (< i len)
-               (begin (vector-set! new-obj i (vector-ref obj i))
-                      (loop (+ i 1)))))
-         new-obj))
-
-     (define (instance-of? obj class-id)
-       (eq? (class-descriptor obj)
-            (table-ref ,(rt-class-table-name) class-id (gensym))))
-
-     (define (is-subclass? class-id super-id)
-       (and (not (eq? class-id 'any-type))
-            (or (and (eq? class-id super-id) class-id)
-                (eq? super-id 'any-type)
-                (memq super-id
-                      (class-desc-supers
-                       (table-ref ,(rt-class-table-name) class-id))))))
-     
-
-     ;; Will find the "best" or most specific instance of the generic
-     ;; function genfun that corresponds to the actual parameter's types
-     (define (find-polymorphic-instance? genfun types)
-       (define (get-super-numbers type)
-         (if (eq? type 'any-type)
-             0
-             (length (class-desc-supers (find-class? type)))))
-
-       (define (method-comparator fun)
-         (lambda (m1 m2)
-           (fun (apply + (map get-super-numbers (method-types m1)))
-                (apply + (map get-super-numbers (method-types m2))))))
-
-       
-       (define (sort-methods method-lst)
-         (reverse (quick-sort (method-comparator <)
-                              (method-comparator =)
-                              (method-comparator >)
-                              method-lst)))
-
-       (define (equivalent-types? instance-types param-types)
-         (if (pair? instance-types)
-             (and (is-subclass? (car param-types) (car instance-types))
-                  (equivalent-types? (cdr instance-types) (cdr param-types)))
-             #t))
-
-       (let ((sorted-instances (sort-methods
-                                (generic-function-instances-list genfun))))
-         (exists (lambda (method) (equivalent-types? (method-types method)
-                                                     types))
-                 sorted-instances)))
-     
-
-     (define-generic (describe obj))
-
-     ;; A usefull function provided by Marc :)
-     (define (add-pp-method! type-predicate transformer)
-       (let* ((old-wr
-               ##wr)
-              (new-wr
-               (lambda (we obj)
-                 (old-wr we
-                         (if (type-predicate obj)
-                             (transformer obj)
-                             obj)))))
-         (set! ##wr new-wr)))
-
-     'object-system-loaded
-     ))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -547,13 +390,13 @@
             ,@(gen-setters field-indices)
             ,(gen-predicate)
             ,(gen-instantiator field-indices)
-            ;; Create a generi print utility (must be at the end)
-            ,(gen-printfun field-indices)
             ;; here the class descriptor is put in a global table
             ;; but it is also available via its variable ,(class-desc-name name)
-            (table-set! ,(rt-class-table-name)
+            (table-set! rt-class-table
                         ',name
-                        ,(class-desc-name name)))))
+                        ,(class-desc-name name))
+            ;; Create a generi print utility (must be at the end)
+            ,(gen-printfun field-indices))))
 
 
 
@@ -576,8 +419,8 @@
        (define (,name ,@args)
          (let ((types (map get-class-id (list ,@args))))
            (cond
-            ((or (table-ref (generic-function-instances
-                             ,(gen-method-table-name name)) types #f)
+            ((or (generic-function-get-instance ,(gen-method-table-name name)
+                                                types)
                  (find-polymorphic-instance? ,(gen-method-table-name name)
                                              types))
              => (lambda (method)
@@ -644,6 +487,176 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Loading of the macro time lib
 (init)
-(init-rt)
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Runtime lib
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Warning: The class descriptor data structure should not be
+;; modified, or if so, some code in the generation of the descriptor
+;; will need to be modified (because the rest of the other vector
+;; fields are used by the indexes of all the fields of the objects.
+(define (class-descriptor obj) (vector-ref obj 0))
+(define (class-desc-id desc)           (vector-ref desc 0))
+(define (class-desc-supers desc)       (vector-ref desc 1))
+(define (class-desc-indices-vect desc) (vector-ref desc 2))
+
+(define (make-generic-function name args)
+  (vector name args (make-table test: equal?) '()))
+(define (generic-function-name gf)             (vector-ref gf 0))
+(define (generic-function-args gf)             (vector-ref gf 1))
+(define (generic-function-instances gf)        (vector-ref gf 2))
+(define (generic-function-sorted-instances gf) (vector-ref gf 3))
+(define (generic-function-instances-list gf)
+  (##table-foldl rcons '() (lambda (k v) v)
+                 (generic-function-instances gf)))
+(define (generic-function-get-instance gf types)
+  (table-ref (generic-function-instances gf) types #f))
+(define (generic-function-instances-add! gf instance)
+  (let ((new-method? (table-ref (generic-function-instances gf)
+                                (method-types instance)
+                                #f)))
+    (table-set! (generic-function-instances gf)
+                (method-types instance)
+                instance)
+    ;; If a method with the same types was not previously used, we can
+    ;; re-use the same sorted-list, but we can't if its not the
+    ;; case...
+    (vector-set! gf 3
+                 (sort-methods
+                  (if new-method?
+                      (cons instance
+                            (generic-function-sorted-instances gf))
+                      (generic-function-instances-list gf)))))
+  
+  ;; Update the sorted list of
+  )
+(define (generic-function-instances-number gf)
+  (table-length (generic-function-instances gf)))
+
+(define make-method vector)          ; (make-method id types body)
+(define (method-id meth) (vector-ref meth 0))
+(define (method-types meth) (vector-ref meth 1))
+(define (method-body meth) (vector-ref meth 2))
+
+
+;; Runtime class table
+(define rt-class-table (make-table test: eq?))
+
+(define (find-class? id)
+  (table-ref rt-class-table id #f))
+
+(define (instance-object? obj)
+  (and (vector? obj)
+       (vector? (class-descriptor obj))
+       (symbol? (class-desc-id (class-descriptor obj)))))
+
+(define (cast obj type)
+  ;; from scm-lib
+  (define (show . args)
+    (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
+  (define-macro (to-string e1 . es)
+    `(with-output-to-string "" (lambda () ,e1 ,@es)))
+  (let ((class-id (get-class-id obj)))
+    (if (is-subclass? class-id type)
+        (vector cast: obj type)
+        (error
+         (to-string (show "Cannot perform cast: "
+                          class-id " is not a sublclass of " type))))))
+(define (cast? obj)
+  (and (vector? obj)
+       (eq? (vector-ref obj 0) cast:)
+       (= (vector-length obj) 3)))
+(define (cast-obj  c) (vector-ref c 1))
+(define (cast-type c) (vector-ref c 2))
+(define (uncast obj) (if (cast? obj) (cast-obj obj) obj))
+
+;; FIXME: VERY BAD object verification..
+(define (get-class-id obj)
+  (cond
+   ((instance-object? obj)
+    (let ((id (class-desc-id (class-descriptor obj))))
+      ;; this test ensures that its a valid class
+      (if (table-ref rt-class-table id #f)
+          id
+          'any-type)))
+   ((cast? obj) (cast-type obj))
+   (else 'any-type)))
+
+;; This produces a "light" copy because the fiels are simply
+;; copied by value, not deeply replicated. Thus a pointer to a
+;; data structure will be copied as a pointer to the same data
+;; structure.
+(define (object-light-copy obj)
+  (let* ((len (vector-length obj))
+         (new-obj (make-vector len #f)))
+    (let loop ((i 0))
+      (if (< i len)
+          (begin (vector-set! new-obj i (vector-ref obj i))
+                 (loop (+ i 1)))))
+    new-obj))
+
+(define (instance-of? obj class-id)
+  (eq? (class-descriptor obj)
+       (table-ref rt-class-table class-id (gensym))))
+
+(define (is-subclass? class-id super-id)
+  (and (not (eq? class-id 'any-type))
+       (or (and (eq? class-id super-id) class-id)
+           (eq? super-id 'any-type)
+           (memq super-id
+                 (class-desc-supers
+                  (table-ref rt-class-table class-id))))))
+
+(define (get-super-numbers type)
+    (if (eq? type 'any-type)
+        0
+        (length (class-desc-supers (find-class? type)))))
+
+(define (sort-methods method-lst)
+    (define (method-comparator fun)
+      (lambda (m1 m2)
+        (fun (apply + (map get-super-numbers (method-types m1)))
+             (apply + (map get-super-numbers (method-types m2))))))
+
+    ;; Note the reversed order of comparators to get the most specific
+    ;; gf instances first.
+    (quick-sort (method-comparator >)
+                (method-comparator =)
+                (method-comparator <)
+                method-lst))
+
+;; Will find the "best" or most specific instance of the generic
+;; function genfun that corresponds to the actual parameter's types
+(define (find-polymorphic-instance? genfun types)
+  (define (equivalent-types? instance-types param-types)
+    (if (pair? instance-types)
+        (and (is-subclass? (car param-types) (car instance-types))
+             (equivalent-types? (cdr instance-types) (cdr param-types)))
+        #t))
+
+  (let ((sorted-instances (generic-function-sorted-instances genfun)))
+    (exists (lambda (method) (equivalent-types? (method-types method)
+                                                types))
+            sorted-instances)))
+
+
+(define-generic (describe obj))
+
+;; A usefull function provided by Marc :)
+(define (add-pp-method! type-predicate transformer)
+  (let* ((old-wr
+          ##wr)
+         (new-wr
+          (lambda (we obj)
+            (old-wr we
+                    (if (type-predicate obj)
+                        (transformer obj)
+                        obj)))))
+    (set! ##wr new-wr)))
 
