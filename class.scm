@@ -417,15 +417,15 @@
        (define ,(gen-method-table-name name)
          (make-generic-function ',name ',args))
        (define (,name ,@args)
-         (let ((types (map get-class-id (list ,@args))))
+         (let ((types (##map get-class-id (##list ,@args))))
            (cond
             ((or (generic-function-get-instance ,(gen-method-table-name name)
                                                 types)
                  (find-polymorphic-instance? ,(gen-method-table-name name)
                                              types))
              => (lambda (method)
-                  (apply (method-body method)
-                         (map uncast ,(cons 'list args)))))
+                  (##apply (method-body method)
+                           (##map uncast ,(cons '##list args)))))
             (else
              (error (string-append
                      "Unknown method: "
