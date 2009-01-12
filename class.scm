@@ -417,15 +417,16 @@
        (define ,(gen-method-table-name name)
          (make-generic-function ',name ',args))
        (define (,name ,@args)
-         (let ((types (##map get-class-id (##list ,@args))))
+         (let ((types (##list ,@(map (lambda (arg) `(get-class-id ,arg))
+                                     args))))
            (cond
             ((or (generic-function-get-instance ,(gen-method-table-name name)
                                                 types)
                  (find-polymorphic-instance? ,(gen-method-table-name name)
                                              types))
              => (lambda (method)
-                  (##apply (method-body method)
-                           (##map uncast ,(cons '##list args)))))
+                  ((method-body method) ,@(map (lambda (arg) `(uncast ,arg))
+                                               args))))
             (else
              (error (string-append
                      "Unknown method: "
@@ -570,8 +571,7 @@
                           class-id " is not a sublclass of " type))))))
 (define (cast? obj)
   (and (vector? obj)
-       (eq? (vector-ref obj 0) cast:)
-       (= (vector-length obj) 3)))
+       (eq? (vector-ref obj 0) cast:)))
 (define (cast-obj  c) (vector-ref c 1))
 (define (cast-type c) (vector-ref c 2))
 (define (uncast obj) (if (cast? obj) (cast-obj obj) obj))
@@ -581,9 +581,11 @@
   (cond
    ((instance-object? obj)
     (let ((id (class-desc-id (class-descriptor obj))))
+      id
       ;; this test ensures that its a valid class
+      #;
       (if (table-ref rt-class-table id #f)
-          id
+      id
           'any-type)))
    ((cast? obj) (cast-type obj))
    (else 'any-type)))
