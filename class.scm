@@ -20,8 +20,8 @@
       
       ;; starts to 2 because 0/1 are reserved for the class id and supers
       (define desc-index 1) 
-      (define class-table (make-table test: eq?))
-      (define meth-table (make-table test: eq?))
+      (define mt-class-table (make-table test: eq?))
+      (define mt-meth-table (make-table test: eq?))
       (define (next-desc-index)
         (set! desc-index (+ desc-index 1))
         desc-index)
@@ -43,8 +43,9 @@
         (and (not (eq? class-id 'any-type))
              (or (and (eq? class-id super-id) class-id)
                  (memq super-id
-                       (class-desc-supers (class-info-desc
-                                           (table-ref class-table class-id))))
+                       (class-desc-supers
+                        (class-info-desc
+                         (table-ref mt-class-table class-id))))
                  (eq? super-id any-type))))
 
 
@@ -83,7 +84,7 @@
                       supers
                       (map (lambda (s) (class-desc-supers
                                         (class-info-desc
-                                         (table-ref class-table s))))
+                                         (table-ref mt-class-table s))))
                            supers))))
           (vector-set! desc 0 id)
           (vector-set! desc 1 all-supers)
@@ -117,21 +118,21 @@
                (hooks (assq write-hooks: options)))
           (if hooks (cdr hooks) #f)))
         
-      (define (make-generic-function name args)
+      (define (make-mt-generic-function name args)
         (vector name args (make-table test: equal?)))
-      (define (generic-function-name gf) (vector-ref gf 0))
-      (define (generic-function-args gf) (vector-ref gf 1))
-      (define (generic-function-instances gf) (vector-ref gf 2))
-      (define (generic-function-instances-add! gf instance)
-        (table-set! (generic-function-instances gf)
+      (define (mt-generic-function-name gf) (vector-ref gf 0))
+      (define (mt-generic-function-args gf) (vector-ref gf 1))
+      (define (mt-generic-function-instances gf) (vector-ref gf 2))
+      (define (mt-generic-function-instances-add! gf instance)
+        (table-set! (mt-generic-function-instances gf)
                     (method-types instance)
                     instance))
-      (define (generic-function-instances-list gf)
-        (table->list (generic-function-instances gf)))
-      (define (generic-function-get-instance gf types)
-        (table-ref (generic-function-instances gf) types #f))
-      (define (generic-function-instances-number gf)
-        (table-length (generic-function-instances gf)))
+      (define (mt-generic-function-instances-list gf)
+        (table->list (mt-generic-function-instances gf)))
+      (define (mt-generic-function-get-instance gf types)
+        (table-ref (mt-generic-function-instances gf) types #f))
+      (define (mt-generic-function-instances-number gf)
+        (table-length (mt-generic-function-instances gf)))
       
       
       (define make-method vector) ; (make-method id types body)
@@ -188,7 +189,8 @@
                      (direct-slot-access
                       `(vector-ref ,(class-desc-name name) ,index))
                      (indirect-slot-access
-                            `(vector-ref (class-descriptor ,obj) ,index)))
+                            `(vector-ref (instance-class-descriptor ,obj)
+                                         ,index)))
                  ;; An optional argument which must be an instance can
                  ;; be given. If this argument is present, then a
                  ;; dynamic fetch of the class field will be made.
@@ -205,7 +207,7 @@
                (let ((hook-call `(hook ,obj slot-value))
                      (slot-access
                       `(vector-ref ,obj
-                                   (vector-ref (class-descriptor ,obj)
+                                   (vector-ref (instance-class-descriptor ,obj)
                                                ,index))))
                  `(define (,(gen-accessor-name name field) ,obj)
                     ,(if read-hooks
@@ -231,7 +233,8 @@
                      (direct-slot-set!
                       `(vector-set! ,(class-desc-name name) ,index ,val))
                      (indirect-slot-set!
-                      `(vector-set! (class-descriptor ,obj) ,index ,val)))
+                      `(vector-set! (instance-class-descriptor ,obj)
+                                    ,index ,val)))
                  `(define (,(gen-setter-name name field)
                            ,obj
                            #!optional (val? #f))
@@ -249,7 +252,7 @@
                      (slot-set!
                       `(vector-set!
                         ,obj
-                        (vector-ref (class-descriptor ,obj) ,index)
+                        (vector-ref (instance-class-descriptor ,obj) ,index)
                         ,val)))
                  `(define (,(gen-setter-name name field) ,obj ,val)
                     ,(if write-hooks
@@ -275,7 +278,7 @@
       `(let ((,i instance-index))
          (set! instance-index (+ instance-index 1))
          ,i))
-    (let* ((instance-index 1)
+    (let* ((instance-index 1) ; 0 -> class-desc
            (desc (make-class-desc
                   name supers
                   (if (pair? field-indices)
@@ -321,7 +324,7 @@
     `(begin
        ;; Class descriptor is put in a global var
        (define ,(class-desc-name name)
-         ,(vector->vector (class-info-desc (table-ref class-table name))))
+         ,(vector->vector (class-info-desc (table-ref mt-class-table name))))
        (define (,(symbol-append 'make- name) ,@(map car instance-field-indices))
          (vector ,(class-desc-name name)
                  ,@(map car instance-field-indices)))))
@@ -331,7 +334,7 @@
     `(begin
        ;; Class descriptor is put in a global var
        (define (,(gen-predicate-name name) ,obj)
-         (is-subclass? (class-desc-id (class-descriptor ,obj))
+         (is-subclass? (class-desc-id (instance-class-descriptor ,obj))
                        ',name))))
 
   (define (gen-printfun field-indices)
@@ -363,7 +366,7 @@
    (lambda (super)
      (let ((super-field-indices
             (cond
-             ((table-ref class-table super #f) =>
+             ((table-ref mt-class-table super #f) =>
               (lambda (desc) (class-info-fi desc)))
              (else (error
                     (to-string
@@ -385,7 +388,7 @@
   (let* ((field-indices (sort-field-indices (table->list temp-field-table)))
          (class-desc (gen-descriptor field-indices)))
 
-    (table-set! class-table name (make-class-info field-indices class-desc))
+    (table-set! mt-class-table name (make-class-info field-indices class-desc))
     `(begin ,@(gen-accessors field-indices)
             ,@(gen-setters field-indices)
             ,(gen-predicate)
@@ -410,23 +413,25 @@
     (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
            (car arg))
           (else arg)))
-  
+
   (let ((args (map parse-arg (cdr signature))))
-    (table-set! meth-table name (make-generic-function name args))
+    (table-set! mt-meth-table name (make-mt-generic-function name args))
     `(begin
        (define ,(gen-method-table-name name)
          (make-generic-function ',name ',args))
-       (define (,name ,@args)
-         (let ((types (##list ,@(map (lambda (arg) `(get-class-id ,arg))
-                                     args))))
+       (define (,name ,@args #!key (cast #f))
+         (let ((types
+                (if cast
+                    (assert-cast (##list ,@args) cast)
+                    (##list ,@(map (lambda (arg) `(get-class-id ,arg))
+                                   args)))))
            (cond
             ((or (generic-function-get-instance ,(gen-method-table-name name)
                                                 types)
                  (find-polymorphic-instance? ,(gen-method-table-name name)
                                              types))
              => (lambda (method)
-                  ((method-body method) ,@(map (lambda (arg) `(uncast ,arg))
-                                               args))))
+                  ((method-body method) ,@args)))
             (else
              (error (string-append
                      "Unknown method: "
@@ -462,10 +467,10 @@
    ;; TODO: Add arity verification
    (lambda ()
      (cond
-      ((table-ref meth-table (name) #f) =>
+      ((table-ref mt-meth-table (name) #f) =>
        (lambda (gen-fun)
          (receive (args types) (parse-args (cdr signature))
-                  (generic-function-instances-add!
+                  (mt-generic-function-instances-add!
                    gen-fun
                    (make-method (name) types `(lambda ,args ,bod ,@bods)))
                   `(generic-function-instances-add!
@@ -502,7 +507,8 @@
 ;; modified, or if so, some code in the generation of the descriptor
 ;; will need to be modified (because the rest of the other vector
 ;; fields are used by the indexes of all the fields of the objects.
-(define (class-descriptor obj) (vector-ref obj 0))
+(define (instance-class-descriptor obj) (vector-ref obj 0))
+
 (define (class-desc-id desc)           (vector-ref desc 0))
 (define (class-desc-supers desc)       (vector-ref desc 1))
 (define (class-desc-indices-vect desc) (vector-ref desc 2))
@@ -554,40 +560,30 @@
 
 (define (instance-object? obj)
   (and (vector? obj)
-       (vector? (class-descriptor obj))
-       (symbol? (class-desc-id (class-descriptor obj)))))
+       (vector? (instance-class-descriptor obj))
+       (symbol? (class-desc-id (instance-class-descriptor obj)))))
 
-(define (cast obj type)
-  ;; from scm-lib
+(define (assert-cast args types)
   (define (show . args)
     (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
   (define-macro (to-string e1 . es)
     `(with-output-to-string "" (lambda () ,e1 ,@es)))
-  (let ((class-id (get-class-id obj)))
-    (if (is-subclass? class-id type)
-        (vector cast: obj type)
-        (error
-         (to-string (show "Cannot perform cast: "
-                          class-id " is not a sublclass of " type))))))
-(define (cast? obj)
-  (and (vector? obj)
-       (eq? (vector-ref obj 0) cast:)))
-(define (cast-obj  c) (vector-ref c 1))
-(define (cast-type c) (vector-ref c 2))
-(define (uncast obj) (if (cast? obj) (cast-obj obj) obj))
+
+  (for-each
+   (lambda (arg type)
+     (let ((class-id (get-class-id arg)))
+       (if (not (is-subclass? class-id type))
+           (error
+            (to-string (show "Cannot perform cast: "
+                             class-id " is not a sublclass of " type))))))
+   args
+   types)
+  types)
 
 ;; FIXME: VERY BAD object verification..
 (define (get-class-id obj)
   (cond
-   ((instance-object? obj)
-    (let ((id (class-desc-id (class-descriptor obj))))
-      id
-      ;; this test ensures that its a valid class
-      #;
-      (if (table-ref rt-class-table id #f)
-      id
-          'any-type)))
-   ((cast? obj) (cast-type obj))
+   ((instance-object? obj) (class-desc-id (instance-class-descriptor obj)))
    (else 'any-type)))
 
 ;; This produces a "light" copy because the fiels are simply
@@ -604,12 +600,14 @@
     new-obj))
 
 (define (instance-of? obj class-id)
-  (eq? (class-descriptor obj)
+  (eq? (instance-class-descriptor obj)
        (table-ref rt-class-table class-id (gensym))))
 
 (define (is-subclass? class-id super-id)
   (and (not (eq? class-id 'any-type))
-       (or (and (eq? class-id super-id) class-id)
+       ;; (or (and (eq? class-id super-id) class-id)
+       ;;  before, but not sure why... eh
+       (or (eq? class-id super-id)
            (eq? super-id 'any-type)
            (memq super-id
                  (class-desc-supers

@@ -186,8 +186,8 @@
     (display (test3 obj-a))
     (display (test3 obj-b))
     (display (test3 obj-e))
-    (display (test3 (cast obj-b 'A)))
-    (display (test3 (cast obj-e 'A)))
+    (display (test3 obj-b cast: '(A)))
+    (display (test3 obj-e cast: '(A)))
     'ok))
 
 ;; Testing slot hooks
