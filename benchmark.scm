@@ -3,9 +3,12 @@
 (load "bench-sim")
 
 (define-class B () (slot: b))
+(define-class D (B) (slot: d))
+(define-class E (B) (slot: e))
 
 (define-generic (f x))
 (define-method (f (x B)) 'toto)
+(define-method (f (x D)) 'tourlou)
 (define (g x) 'tutu)
 
 (define-type C c)
@@ -62,6 +65,16 @@
 
 (define-benchmark genfun-call "Generic function call benchmark"
   (lambda () (let ((obj (make-B 2)))
+               (for i 0 (< i upper-bound)
+                    (f obj))))
+  (lambda () (let ((obj (make-C 1)))
+               (for i 0 (< i upper-bound)
+                    (g obj)))))
+
+;;;;;;;;;;;;;;;;;; Polymorphic function call benchmark ;;;;;;;;;;;;;;;;;;;;;;;
+
+(define-benchmark genfun-call "Polymorphic function call benchmark"
+  (lambda () (let ((obj (make-E 2 3)))
                (for i 0 (< i upper-bound)
                     (f obj))))
   (lambda () (let ((obj (make-C 1)))
