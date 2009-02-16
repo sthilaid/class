@@ -239,10 +239,11 @@
 
      (define (is-subclass? class-id super-id)
        (or (and (eq? class-id super-id) class-id)
+           (eq? super-id 'any-type)
            (memq super-id
                  (class-desc-supers
-                  (table-ref ,(rt-class-table-name) class-id)))
-           (eq? super-id 'any-type)))
+                  (table-ref ,(rt-class-table-name) class-id)))))
+     
 
      ;; Will find the "best" or most specific instance of the generic
      ;; function genfun that corresponds to the actual parameter's types
@@ -485,8 +486,9 @@
     `(begin
        ;; Class descriptor is put in a global var
        (define (,(gen-predicate-name name) ,obj)
-         (is-subclass? (class-desc-id (class-descriptor ,obj))
-                       ',name))))
+         (and (instance-object? ,obj)
+              (is-subclass? (class-desc-id (class-descriptor ,obj))
+                            ',name)))))
 
   (define (gen-printfun field-indices)
     ;; not clean hehe, obj uses a gensym but not the rest of the code...
