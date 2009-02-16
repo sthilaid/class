@@ -110,10 +110,11 @@
     (display (test2 a d)))
   'ok)
 
-(define-test test-predicate-simple "yesno" 'ok
+(define-test test-predicate-simple "yesnono" 'ok
   (let ((a (make-A 1)))
-    (display (if (A? a) 'yes 'no))
-    (display (if (C? a) 'yes 'no))
+    (display (if (A? a)     'yes 'no))
+    (display (if (C? a)     'yes 'no))
+    (display (if (C? 'toto) 'yes 'no))
     'ok))
 
 (define-test test-predicate-hierarchy "yyyyynnyy" 'ok
@@ -136,7 +137,7 @@
   (if (vector? (h (make-C 10) (make-C 11))) (display 'ok) (display 'no))
   'ok)
 
-(define-test test-instance-of "A#fAB#t#f#f#t#f#f" 'ok
+(define-test test-instance-of "#t#f#t#t#t#f#f#t#f#f" 'ok
   (let ((a (make-A 1))
         (b (make-B 1 2)))
     (display (A? a))
