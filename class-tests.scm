@@ -15,25 +15,32 @@
 (define-class E (B D)   (slot: e))
 (define-class F (B C))
 
-(define-generic (test obj))
+(define-generic test)
 (define-method (test (a A)) (number->string (A-a a)))
 (define-method (test (b B)) (symbol->string (B-b b)))
 (define-method (test (c C)) (number->string (+ (C-c c) 5)))
 (define-method (test (e E)) 'e)
 
-(define-generic (test2 o1 o2))
+(define-generic test2)
 (define-method (test2 (a1 A) (a2 A)) (+ (A-a a1) (A-a a2)))
 (define-method (test2 (b1 B) (b2 B)) (symbol-append (B-b b1) (B-b b2)))
 (define-method (test2 (a A)  (c C))  (+ (A-a a) (C-c c)))
 
-(define-generic (test3 o))
+(define-generic test3)
 (define-method (test3 (o A)) 'a)
 (define-method (test3 (o B)) 'b)
 (define-method (test3 (o E)) 'e)
 
-(define-generic (h x y))
+(define-generic h)
 (define-method (h x y) x)
 (define-method (h (x A) (y A)) (A-a x))
+
+(define-generic TotO!)
+(define-method (TotO! (x A)) (A-a x))
+(define-method (TotO! (x B)) (B-b x))
+(define-method (TotO! (x A) (y A)) (+ (TotO! x) (TotO! y)))
+(define-method (TotO! (x B) (y B)) (+ (TotO! x) (TotO! y)))
+
 
 (define-test simple-instance-slots "aaabbccdde" 'ok
   (let ((obj (make-E 'a 'b 'c 'd 'e)))
@@ -80,7 +87,7 @@
 
 (define-test test-generic-redefinition "toto!titi!" 'ok
   (let ((a (make-A 10)))
-    (define-generic (toto obj))
+    (define-generic toto)
     (define-method (toto (obj A)) 'toto!)
     (display (toto a))
     (define-method (toto (obj A)) 'titi!)
@@ -187,8 +194,8 @@
     (display (test3 obj-a))
     (display (test3 obj-b))
     (display (test3 obj-e))
-    (display (test3 obj-b cast: '(A)))
-    (display (test3 obj-e cast: '(A)))
+    (display (test3 cast: '(A) obj-b))
+    (display (test3 cast: '(A) obj-e))
     'ok))
 
 ;; Testing slot hooks
@@ -211,4 +218,43 @@
     (hooked-cs)
     'ok))
 
+(define-test test-multiple-arity-genfun "1921810" 'ok
+  (let ((a (make-A 1))
+        (b (make-B 3 9)))
+    (display (TotO! a))
+    (display (TotO! b))
+    (display (TotO! a a))
+    (display (TotO! b b))
+    (display (TotO! a b))
+    'ok))
 
+;; can't use local class defs
+(define-test test-local-declarations "" 'ok
+  ((lambda ()
+     (define-generic test)
+     (define-method (test (x A)) 'ok)
+     (test (make-A 1)))))
+
+(define-class weird-complex-number () (slot: real) (slot: imag)
+  (constructor: (lambda (obj)
+                  (weird-complex-number-real-set! obj 0)
+                  (weird-complex-number-imag-set! obj 0)))
+  (constructor: (lambda (obj real)
+                  (weird-complex-number-real-set! obj real)
+                  (weird-complex-number-imag-set! obj (* real real))))
+  (constructor: (lambda (obj real imag)
+                  (weird-complex-number-real-set! obj real)
+                  (weird-complex-number-imag-set! obj imag))))
+(define-test test-constructors "003932003932" 'ok
+  (define-generic disp)
+  (define-method (disp (n1 weird-complex-number))
+    (display (weird-complex-number-real n1))
+    (display (weird-complex-number-imag n1)))
+
+  (disp (init! (make-weird-complex-number-instance)))
+  (disp (init! (make-weird-complex-number-instance) 3))
+  (disp (init! (make-weird-complex-number-instance) 3 2))
+  (disp (new weird-complex-number))
+  (disp (new weird-complex-number 3))
+  (disp (new weird-complex-number 3 2))
+  'ok)
