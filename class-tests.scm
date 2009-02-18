@@ -155,8 +155,8 @@
     (display (instance-of? a 'B))
     (display (instance-of? b 'A))
     (display (instance-of? b 'B))
-    (display (instance-of? a 'any-type))
-    (display (instance-of? b 'any-type)))
+    (display (instance-of? a '*))
+    (display (instance-of? b any-type)))
   'ok)
 
 (define-test test-describe "" 'ok
@@ -257,4 +257,19 @@
   (disp (new weird-complex-number))
   (disp (new weird-complex-number 3))
   (disp (new weird-complex-number 3 2))
+  'ok)
+
+(define-test test-set-fields! "6734567345" 'ok
+  (let* ((e (new E 1 2 3 4 5)))
+    (let ((test (set-fields! e E ((a 6) (b 7)))))
+      (display (E-a e))
+      (display (E-b e))
+      (display (E-c e))
+      (display (E-d e))
+      (display (E-e e)))
+    (display (E-a e))
+    (display (E-b e))
+    (display (E-c e))
+    (display (E-d e))
+    (display (E-e e)))
   'ok)
