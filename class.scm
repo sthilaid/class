@@ -1,6 +1,6 @@
 ;; Very simple object system which focuses on runtime speed.
 
-(include "class#.scm")
+(include "class_.scm")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
