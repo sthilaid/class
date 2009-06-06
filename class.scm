@@ -46,9 +46,7 @@
         (symbol-append class-name '?))
       (define (class-desc-name  class-name)
         (symbol-append class-name '-class-descriptor))
-      (define (gen-instantiator-name name)
-        (symbol-append 'make- name '-instance))
-
+      
       (define (gen-method-desc-name sign)
         (symbol-append (meth-name sign) '-meth-desc))
 

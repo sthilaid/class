@@ -1,4 +1,13 @@
 ;; utilitary macros for the object system
+(define-macro (init-header)
+  (eval '(begin
+           (define (symbol-append s1 . ss)
+             (string->symbol (apply string-append
+                                    (symbol->string s1)
+                                    (map symbol->string ss))))
+           (define (gen-instantiator-name name)
+             
+             (symbol-append 'make- name '-instance)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generic constructors (new)
@@ -30,3 +39,4 @@
                   `(,(gen-setter-name class field-name) ,obj-ptr ,val)))
               field-val-list)
        ,obj-ptr)))
+(init-header)
