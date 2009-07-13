@@ -282,14 +282,21 @@
     (display (E-e e)))
   'ok)
 
-(define-test test-call-next-method "6" 12
+(define-test test-call-next-method "627" 12
   (begin
     (define-generic intern-test)
     (define-method (intern-test (x <A>)) (<A>-a x))
+    (define-method (intern-test (x <A>) y) (+ (<A>-a x) y))
     (define-method (intern-test (x <B>)) (+ (<B>-b x) (call-next-method)))
     (define-method (intern-test (x <C>)) (+ (<C>-c x) (call-next-method)))
     (define-method (intern-test (x <D>)) (<D>-d x))
     (define-method (intern-test (x <E>)) (+ (<E>-e x) (call-next-method)))
     (define-method (intern-test (x <F>)) (+ (<F>-f x) (call-next-method)))
+    (define-method (intern-test (x <F>) y) (+ y (<F>-f x) (call-next-method)))
+
+    ;; simple test
     (display (intern-test (new <C> 1 2 3)))
+    ;; testing * type arguments
+    (display (intern-test (new <F> 1 2 3 4 5 6) 10))
+    ;; testing correct chained calls
     (intern-test (new <F> 1 2 3 4 5 6))))

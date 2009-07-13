@@ -686,7 +686,7 @@
 
 (define (get-supers type)
   (if (any-type? type)
-      '()
+      '*
       (class-desc-supers (find-class? type))))
 
 (define (sort-methods method-lst)
