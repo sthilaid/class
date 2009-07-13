@@ -15,6 +15,14 @@
 (define-class E (B D)   (slot: e))
 (define-class F (B C))
 
+;; Another similar hierarchy
+(define-class <A> ()    (slot: a))
+(define-class <B> (<A>) (slot: b))
+(define-class <C> (<B>) (slot: c))
+(define-class <D> ()    (slot: d))
+(define-class <E> (<D>) (slot: e))
+(define-class <F> (<C> <E>) (slot: f))
+
 (define-generic test)
 (define-method (test (a A)) (number->string (A-a a)))
 (define-method (test (b B)) (symbol->string (B-b b)))
@@ -273,3 +281,15 @@
     (display (E-d e))
     (display (E-e e)))
   'ok)
+
+(define-test test-call-next-method "6" 12
+  (begin
+    (define-generic intern-test)
+    (define-method (intern-test (x <A>)) (<A>-a x))
+    (define-method (intern-test (x <B>)) (+ (<B>-b x) (call-next-method)))
+    (define-method (intern-test (x <C>)) (+ (<C>-c x) (call-next-method)))
+    (define-method (intern-test (x <D>)) (<D>-d x))
+    (define-method (intern-test (x <E>)) (+ (<E>-e x) (call-next-method)))
+    (define-method (intern-test (x <F>)) (+ (<F>-f x) (call-next-method)))
+    (display (intern-test (new <C> 1 2 3)))
+    (intern-test (new <F> 1 2 3 4 5 6))))

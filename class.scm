@@ -4,7 +4,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Macro expansion time env
+;;; Macro expansion time env
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Initializes the global define-class macro-expension-time
@@ -131,7 +131,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; define-class
+;;; define-class
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (define-class name supers . fields) 
@@ -467,7 +467,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Generic methods
+;;; Generic methods
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (define-generic name)
@@ -481,16 +481,23 @@
          ;; parameters was constant. Now (map get-class-id...) is
          ;; performed at runtime.
          (let ((types
-                (if cast
-                    (assert-cast args cast)
-                    (map get-class-id args))))
+                (cond
+                 ((pair? cast) cast)
+                 (else (map get-class-id args)))))
            (cond
             ((or (generic-function-get-instance ,(gen-method-table-name name)
                                                 types)
                  (find-polymorphic-instance? ,(gen-method-table-name name)
                                              types))
              => (lambda (method)
-                  (apply (method-body method) args)))
+                  (parameterize ((___call-next-method
+                                  (lambda ()
+                                    (apply ,name
+                                           cast:
+                                           (map get-supers
+                                                (current-method-types))
+                                           args))))
+                    (apply (method-body method) args))))
             (else
              (error (string-append
                      "Unknown method: "
@@ -526,13 +533,18 @@
       ((table-ref mt-meth-table (name) #f) =>
        (lambda (gen-fun)
          (receive (args types) (parse-args (cdr signature))
-                  (mt-generic-function-instances-add!
-                   gen-fun
-                   (make-method (name) types `(lambda ,args ,bod ,@bods)))
-                  `(generic-function-instances-add!
-                    ,(gen-method-table-name (name))
-                    (make-method ',(name) ',types
-                                 (lambda ,args ,bod ,@bods))))))
+           (let ((parameterized-body
+                  `(lambda ,args
+                     (parameterize ((current-method-types ',types))
+                       ,bod ,@bods))))
+             ;; macro exp time book-keeping
+            (mt-generic-function-instances-add!
+             gen-fun
+             (make-method (name) types parameterized-body))
+            ;; runtime book-keeping
+            `(generic-function-instances-add!
+              ,(gen-method-table-name (name))
+              (make-method ',(name) ',types ,parameterized-body))))))
       (else
        `(begin
           (define-generic ,(name))
@@ -548,7 +560,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Runtime lib
+;;; Runtime lib
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Warning: The class descriptor data structure should not be
@@ -613,6 +625,8 @@
        (vector? (instance-class-descriptor obj))
        (symbol? (class-desc-id (instance-class-descriptor obj)))))
 
+;; Temporarily removed because slows the code down and cannot support
+;; cast to a list of classes lightly.
 (define (assert-cast args types)
   (define (show . args)
     (for-each (lambda (x) (if (string? x) (display x) (write x))) args))
@@ -670,6 +684,11 @@
         0
         (length (class-desc-supers (find-class? type)))))
 
+(define (get-supers type)
+  (if (any-type? type)
+      '()
+      (class-desc-supers (find-class? type))))
+
 (define (sort-methods method-lst)
     (define (method-comparator fun)
       (lambda (m1 m2)
@@ -685,7 +704,14 @@
 
 (define (equivalent-types? instance-types param-types)
     (if (pair? instance-types)
-        (and (is-subclass? (car param-types) (car instance-types))
+        (and (if (pair? (car param-types))
+                 ;; a list of param types is used to implement the
+                 ;; call-next-method functionnality by providing the list
+                 ;; of the super classes here...
+                 (let ((instance-type (car instance-types)))
+                   (exists (lambda (x) (is-subclass? x instance-type))
+                           (car param-types)))
+                 (is-subclass? (car param-types) (car instance-types)))
              (equivalent-types? (cdr instance-types) (cdr param-types)))
         #t))
 
@@ -697,7 +723,16 @@
     (exists (lambda (method) (equivalent-types? (method-types method)
                                                 types))
             (filter (lambda (i) (= (length (method-types i)) args-nb))
-             sorted-instances))))
+                    sorted-instances))))
+
+;; The call-next-method works well with single inheritance, but might
+;; give unexpected results with multiple inheritance, as the
+;; next-method called will depend on the sort-methods function which
+;; does *not* discriminate method instances with equal number of super
+;; classes and thus might choose arbitriraly which one will be called.
+(define ___call-next-method  (make-parameter #f))
+(define current-method-types (make-parameter #f))
+(define (call-next-method) ((___call-next-method)))
 
 
 (define-generic describe)
