@@ -4,133 +4,6 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Macro expansion time env
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Initializes the global define-class macro-expension-time
-;; environnment. This macro must be called
-(define-macro (init)
-  ;; macro exp time librairy
-  (eval
-   '(begin
-      (include "scm-lib-macro.scm")
-      (include "scm-lib.scm")
-      
-      ;; method expansion mode
-      (define mode 'iterative) ; iterative as default
-      
-      ;; starts to 2 because 0/1 are reserved for the class id and supers
-      (define desc-index 1) 
-      (define mt-class-table (make-table test: eq?))
-      (define mt-meth-table (make-table test: eq?))
-      (define (next-desc-index)
-        (set! desc-index (+ desc-index 1))
-        desc-index)
-      
-      (define (meth-name sign) (if (not (list? sign))
-                                   (error 'bad-signature-syntax)
-                                   (car sign)))
-      (define any-type '*)
-
-      (define (symbol-append s1 . ss)
-          (string->symbol (apply string-append
-                                 (symbol->string s1)
-                                 (map symbol->string ss))))
-
-      ;;;;;;;;;;;;;;; Naming convention abstractions ;;;;;;;;;;;;;;;
-      (define (gen-accessor-name class-name var)
-        (symbol-append class-name '- var))
-      (define (gen-setter-name class-name var)
-        (symbol-append class-name '- var '-set!))
-      (define (gen-predicate-name class-name)
-        (symbol-append class-name '?))
-      (define (class-desc-name  class-name)
-        (symbol-append class-name '-class-descriptor))
-      
-      (define (gen-method-desc-name sign)
-        (symbol-append (meth-name sign) '-meth-desc))
-
-      (define (gen-method-table-name name)
-        (symbol-append name '-meth-table))
-      
-
-      ;;;;;;;;;;;;;;; Data structure used ;;;;;;;;;;;;;;;
-
-      (define (make-class-info field-indices descriptor)
-        (vector field-indices descriptor))
-      (define (class-info-fi info) (vector-ref info 0))
-      (define (class-info-desc info) (vector-ref info 1))
-      
-      (define (make-class-desc id supers num-fields)
-        ;; add 2 to include place holders for the id and supers
-        (let ((desc (make-vector (+ num-fields 2) 'unknown-slot))
-              (all-supers
-               (apply generic-multi-union eq?
-                      supers
-                      (map (lambda (s) (class-desc-supers
-                                        (class-info-desc
-                                         (table-ref mt-class-table s))))
-                           supers))))
-          (vector-set! desc 0 id)
-          (vector-set! desc 1 all-supers)
-          desc))
-      (define (class-desc-id desc) (vector-ref desc 0))
-      (define (class-desc-supers desc) (vector-ref desc 1))
-      (define (class-desc-indices-vect desc) (vector-ref desc 2))
-
-
-      (define (make-slot type index options inherited?)
-        (vector type index options inherited?))
-      (define (is-class-slot? slot-info)
-        (and (vector? slot-info)
-             (eq? (slot-type slot-info) class-slot:)))
-      (define (is-instance-slot? slot-info)
-        (and (vector? slot-info)
-             (eq? (slot-type slot-info) slot:)))
-      (define (slot-type slot-info)
-        (vector-ref slot-info 0))
-      (define (slot-index slot-info)
-        (vector-ref slot-info 1))
-      (define (slot-options slot-info)
-        (vector-ref slot-info 2))
-      (define (slot-inherited? slot-info)
-        (vector-ref slot-info 3))
-
-      ;; returns the slot hooks, if any is present.
-      (define (slot-read-hooks? slot-info)
-        (let* ((options (slot-options slot-info))
-               (hooks (assq read-hooks: options)))
-          (if hooks (cdr hooks) #f)))
-      (define (slot-write-hooks? slot-info)
-        (let* ((options (slot-options slot-info))
-               (hooks (assq write-hooks: options)))
-          (if hooks (cdr hooks) #f)))
-        
-      (define (make-mt-generic-function name args)
-        (vector name args (make-table test: equal?)))
-      (define (mt-generic-function-name gf) (vector-ref gf 0))
-      (define (mt-generic-function-args gf) (vector-ref gf 1))
-      (define (mt-generic-function-instances gf) (vector-ref gf 2))
-      (define (mt-generic-function-instances-add! gf instance)
-        (table-set! (mt-generic-function-instances gf)
-                    (method-types instance)
-                    instance))
-      (define (mt-generic-function-instances-list gf)
-        (table->list (mt-generic-function-instances gf)))
-      (define (mt-generic-function-get-instance gf types)
-        (table-ref (mt-generic-function-instances gf) types #f))
-      (define (mt-generic-function-instances-number gf)
-        (table-length (mt-generic-function-instances gf)))
-      
-      
-      (define make-method vector) ; (make-method id types body)
-      (define (method-id meth) (vector-ref meth 0))
-      (define (method-types meth) (vector-ref meth 1))
-      (define (method-body meth) (vector-ref meth 2)))
-   ))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; define-class
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -551,14 +424,6 @@
           (define-method ,signature ,bod ,@bods)))))))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;; Runtime stuff ;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Loading of the macro time lib
-(init)
-
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Runtime lib
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -749,4 +614,3 @@
                         (transformer obj)
                         obj)))))
     (set! ##wr new-wr)))
-
