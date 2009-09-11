@@ -300,3 +300,24 @@
     (display (intern-test (new <F> 1 2 3 4 5 6) 10))
     ;; testing correct chained calls
     (intern-test (new <F> 1 2 3 4 5 6))))
+
+(define-test test-dispatch-on-values "any3tenfiveonetwoany2any2" 'ok
+  (begin
+    (define-generic on-values)
+    (define-method (on-values x y (z (match-value: 10)))
+      'ten)
+    (define-method (on-values (x (match-value: 5)))
+      'five)
+    (define-method (on-values (x (match-value: 1)) (y (match-value: 2)))
+      'onetwo)
+    (define-method (on-values x y z)
+      'any3)
+    (define-method (on-values x y)
+      'any2)
+    (write (on-values 1 2 3))
+    (write (on-values 1 2 10))
+    (write (on-values 5))
+    (write (on-values 1 2))
+    (write (on-values 1 3))
+    (write (on-values 3 2))
+    'ok))

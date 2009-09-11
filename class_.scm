@@ -29,7 +29,18 @@
       (define (meth-name sign) (if (not (list? sign))
                                    (error 'bad-signature-syntax)
                                    (car sign)))
+
       (define any-type '*)
+      (define (any-type? ty) (eq? ty any-type))
+      (define (make-external-object val) (cons val any-type))
+      (define (external-object? ty) (and (pair? ty)
+                                         (eq? (cdr ty) any-type)))
+      (define external-object-value car)
+
+      (define match-type match-value:)
+      (define (make-match-type val) (list match-type val))
+      (define (match-type? obj) (and (list? obj) (eq? (car obj) match-type)))
+      (define match-type-value cadr)
 
       (define (symbol-append s1 . ss)
           (string->symbol (apply string-append

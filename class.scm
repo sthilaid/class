@@ -1,3 +1,4 @@
+
 ;; Very simple object system which focuses on runtime speed.
 
 (include "class_.scm")
@@ -387,11 +388,20 @@
   (define (name) (meth-name signature))
   (define unknown-meth-error 'unknown-meth)
   (define (parse-arg arg)
-    (cond ((and (list? arg) (symbol? (car arg)) (symbol? (cadr arg)))
-           (let ((var (car arg))
-                 (type (cadr arg)))
-             (values var type)))
-          (else (values arg any-type))))
+    (cond 
+     ;; Match a specific value
+     ((and (list? arg) (= (length arg) 2)
+           (symbol? (car arg))
+           (match-type? (cadr arg)))
+      (values (car arg) (cadr arg)))
+     ;; Match a specific class tree
+     ((and (list? arg) (= (length arg) 2)
+           (symbol? (car arg)) (symbol? (cadr arg)))
+      (let ((var (car arg))
+            (type (cadr arg)))
+        (values var type)))
+     ;; Otherwise match anything
+     (else (values arg any-type))))
   ;; Returns 2 values: the ordrered list of arguments and the ordered
   ;; list of their types.
   (define (parse-args args) (map-values parse-arg args))
@@ -478,6 +488,16 @@
 
 (define any-type '*)
 (define (any-type? ty) (eq? ty any-type))
+(define (make-external-object val) (cons val any-type))
+(define (external-object? ty) (and (pair? ty)
+                                   (eq? (cdr ty) any-type)))
+(define external-object-value car)
+
+(define match-type match-value:)
+(define (make-match-type val) (list match-type val))
+(define (match-type? obj) (and (list? obj) (eq? (car obj) match-type)))
+(define match-type-value cadr)
+
 
 ;; Runtime class table
 (define rt-class-table (make-table test: eq?))
@@ -516,7 +536,7 @@
 (define (get-class-id obj)
   (cond
    ((instance-object? obj) (class-desc-id (instance-class-descriptor obj)))
-   (else any-type)))
+   (else (make-external-object obj))))
 
 ;; This produces a "light" copy because the fiels are simply
 ;; copied by value, not deeply replicated. Thus a pointer to a
@@ -538,20 +558,30 @@
 (define (is-subclass? class-id super-id)
   (or (eq? class-id super-id)
       (any-type? super-id)
-      (and (not (any-type? class-id))
+      (if (match-type? super-id)
+          (and (external-object? class-id)
+               (equal? (external-object-value class-id)
+                       (match-type-value super-id)))
+          ;; else regular class type
+          (and (not (any-type? class-id))
            (memq super-id
                  (class-desc-supers
                   (table-ref rt-class-table class-id)))
-           #t)))
+           #t))))
 
 (define (get-super-numbers type)
-    (if (any-type? type)
-        0
-        (length (class-desc-supers (find-class? type)))))
+    (cond
+     ((or (any-type? type) (external-object? type))
+      0)
+     ;; match types request are priotary toward any-type requests...
+     ((match-type? type)
+      1)
+     (else
+      (length (class-desc-supers (find-class? type))))))
 
 (define (get-supers type)
-  (if (any-type? type)
-      '*
+  (if (or (any-type? type) (external-object? type) (match-type? type))
+      any-type
       (class-desc-supers (find-class? type))))
 
 (define (sort-methods method-lst)
@@ -569,7 +599,8 @@
 
 (define (equivalent-types? instance-types param-types)
     (if (pair? instance-types)
-        (and (if (pair? (car param-types))
+        (and (if (and (pair? (car param-types))
+                      (not (external-object? (car param-types))))
                  ;; a list of param types is used to implement the
                  ;; call-next-method functionnality by providing the list
                  ;; of the super classes here...
