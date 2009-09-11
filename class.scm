@@ -261,8 +261,7 @@
        ;; Class descriptor is put in a global var
        (define (,(gen-predicate-name name) ,obj)
          (and (instance-object? ,obj)
-              (is-subclass? (class-desc-id (instance-class-descriptor ,obj))
-                            ',name)))))
+              (is-subclass? ,obj ',name)))))
 
   (define (gen-printfun field-indices)
     ;; not clean hehe, obj uses a gensym but not the rest of the code...
@@ -359,10 +358,18 @@
                  ((pair? cast) cast)
                  (else (map get-class-id args)))))
            (cond
-            ((or (generic-function-get-instance ,(gen-method-table-name name)
-                                                types)
+            ((or
+              ;; Can only use fast meth instance recovery if there are
+              ;; no value specific instances... Otherwise, we can't
+              ;; know if there might be a matching instance without
+              ;; using the find-polymorphic-instance? protocol
+              (and (not (generic-function-contains-value-matching-instances?
+                         ,(gen-method-table-name name)))
+                   (generic-function-get-instance
+                    ,(gen-method-table-name name)
+                    types))
                  (find-polymorphic-instance? ,(gen-method-table-name name)
-                                             types))
+                                             args types))
              => (lambda (method)
                   (parameterize ((___call-next-method
                                   (lambda ()
@@ -387,47 +394,83 @@
     `(with-output-to-string "" (lambda () ,e1 ,@es)))
   (define (name) (meth-name signature))
   (define unknown-meth-error 'unknown-meth)
-  (define (parse-arg arg)
+
+  ;; This functions parses the received type inputed from the user and
+  ;; returns 2 values, the first is the parsed type to be used in the
+  ;; runtime in the meth instance obj, and the 2nd is a boolean
+  ;; indicating if the type is a value specefic type.
+  (define (parse-type ty)
     (cond 
      ;; Match a specific value
-     ((and (list? arg) (= (length arg) 2)
-           (symbol? (car arg))
-           (match-type? (cadr arg)))
-      (values (car arg) (cadr arg)))
+     ((match-type? ty)
+      (values `(quote ,ty) #t))
+     ((or (and-type? ty)
+          (or-type? ty))
+      (receive (types any-value-types?)  (map-values parse-type (cdr ty))
+        (values `(list ',(car ty) ,@types)
+                (exists (lambda (x) x) any-value-types?))))
+     
+     ((match-member-type? ty)
+      (let ((match-mem-ty ty))
+        (values (make-match-mem-type (cadr ty) (caddr ty) (cadddr ty))
+                #t)))
+     
      ;; Match a specific class tree
-     ((and (list? arg) (= (length arg) 2)
-           (symbol? (car arg)) (symbol? (cadr arg)))
-      (let ((var (car arg))
-            (type (cadr arg)))
-        (values var type)))
+     ((symbol? ty) (values `(quote ,ty) #f))
+
      ;; Otherwise match anything
-     (else (values arg any-type))))
-  ;; Returns 2 values: the ordrered list of arguments and the ordered
-  ;; list of their types.
+     (else (values `(quote ,any-type) #f))))
+
+  ;; Parse a method argument and return 3 values, the argument name,
+  ;; the parsed type and a boolean indicating if the types are value
+  ;; specefic (eg: (match-value: 3), (or (match-member A a 2) ...) etc...
+  (define (parse-arg arg)
+    (cond ((and (list? arg) (= (length arg) 2))
+           (receive (ty any-value-spec-type?) (parse-type (cadr arg))
+             (values (car arg) ty any-value-spec-type?)))
+          (else (values arg `(quote ,any-type) #f))))
+
+  ;; Returns 3 values: the ordrered list of arguments, the ordered
+  ;; list of their types, ans the ordered list of boolean values
+  ;; telling if the type was value specific or not.
   (define (parse-args args) (map-values parse-arg args))
+
   (with-exception-catcher
    (lambda (e)
      (if (eq? e unknown-meth-error)
          (error (to-string (show "Generic method was not defined: " (name))))
          (raise e)))
-   ;; TODO: Add arity verification
    (lambda ()
      (cond
       ((table-ref mt-meth-table (name) #f) =>
        (lambda (gen-fun)
-         (receive (args types) (parse-args (cdr signature))
-           (let ((parameterized-body
-                  `(lambda ,args
-                     (parameterize ((current-method-types ',types))
-                       ,bod ,@bods))))
+         (receive (args types value-spec-types?) (parse-args (cdr signature))
+           (let* ((contains-value-spec-type?
+                   ;; accumulate all the value-spec-types? booleans into one.
+                   (fold-l (lambda (acc x) (or x acc)) #f value-spec-types?))
+                  ;; parameterized body of the function to be used
+                  ;; with call-next-method.
+                  (parameterized-body
+                   `(lambda ,args
+                      (parameterize ((current-method-types (list ,@types)))
+                                    ,bod ,@bods)))
+                  ;; runtime method setup code. (abstracted here
+                  ;; because its used twice below).
+                  (runtime-setup `(generic-function-instances-add!
+                                   ,(gen-method-table-name (name))
+                                   (make-method ',(name) (list ,@types)
+                                                ,parameterized-body))))
              ;; macro exp time book-keeping
-            (mt-generic-function-instances-add!
-             gen-fun
-             (make-method (name) types parameterized-body))
+             (mt-generic-function-instances-add!
+              gen-fun (make-method (name) types parameterized-body))
             ;; runtime book-keeping
-            `(generic-function-instances-add!
-              ,(gen-method-table-name (name))
-              (make-method ',(name) ',types ,parameterized-body))))))
+            (if contains-value-spec-type?
+                ;; Make sure the genfun structure knows that there is
+                ;; at least one instance that is Value Specific.
+                `(begin (generic-function-contains-value-matching-instances!
+                         ,(gen-method-table-name (name)))
+                        ,runtime-setup)
+                runtime-setup)))))
       (else
        `(begin
           (define-generic ,(name))
@@ -449,11 +492,15 @@
 (define (class-desc-indices-vect desc) (vector-ref desc 2))
 
 (define (make-generic-function name args)
-  (vector name args (make-table test: equal?) '()))
+  (vector name args (make-table test: equal?) '() #f))
 (define (generic-function-name gf)             (vector-ref gf 0))
 (define (generic-function-args gf)             (vector-ref gf 1))
 (define (generic-function-instances gf)        (vector-ref gf 2))
 (define (generic-function-sorted-instances gf) (vector-ref gf 3))
+(define (generic-function-contains-value-matching-instances? gf)
+  (vector-ref gf 4))
+(define (generic-function-contains-value-matching-instances! gf)
+  (vector-set! gf 4 #t))
 (define (generic-function-instances-list gf)
   (##table-foldl rcons '() (lambda (k v) v)
                  (generic-function-instances gf)))
@@ -488,15 +535,29 @@
 
 (define any-type '*)
 (define (any-type? ty) (eq? ty any-type))
-(define (make-external-object val) (cons val any-type))
-(define (external-object? ty) (and (pair? ty)
-                                   (eq? (cdr ty) any-type)))
-(define external-object-value car)
+(define (external-object? obj) (not (instance-object? obj)))
 
 (define match-type match-value:)
-(define (make-match-type val) (list match-type val))
 (define (match-type? obj) (and (list? obj) (eq? (car obj) match-type)))
 (define match-type-value cadr)
+
+(define match-member match-member:)
+(define (match-member-type? ty) (and (list? ty) (eq? (car ty) match-member)))
+(define (match-member-class ty) (cadr ty))
+(define (match-member-predicate ty) (caddr ty))
+
+(define or-type 'or)
+(define (or-type? ty) (and (list? ty) (eq? (car ty) or-type)))
+(define or-type-types cdr)
+
+(define and-type 'and)
+(define (and-type? ty) (and (list? ty) (eq? (car ty) and-type)))
+(define and-type-types cdr)
+
+(define (wrap-type ty) (list '__wrapped-type__ ty))
+(define unwrap-type cadr)
+(define (wrapped-type? ty) (and (list? ty)
+                                (eq? (car ty) '__wrapped-type__)))
 
 
 ;; Runtime class table
@@ -536,7 +597,7 @@
 (define (get-class-id obj)
   (cond
    ((instance-object? obj) (class-desc-id (instance-class-descriptor obj)))
-   (else (make-external-object obj))))
+   (else any-type)))
 
 ;; This produces a "light" copy because the fiels are simply
 ;; copied by value, not deeply replicated. Thus a pointer to a
@@ -555,32 +616,62 @@
   (eq? (instance-class-descriptor obj)
        (table-ref rt-class-table class-id (gensym))))
 
-(define (is-subclass? class-id super-id)
-  (or (eq? class-id super-id)
-      (any-type? super-id)
-      (if (match-type? super-id)
-          (and (external-object? class-id)
-               (equal? (external-object-value class-id)
-                       (match-type-value super-id)))
-          ;; else regular class type
-          (and (not (any-type? class-id))
-           (memq super-id
-                 (class-desc-supers
-                  (table-ref rt-class-table class-id)))
-           #t))))
+;; Determines if obj is a subclass instance of the super-id class. If
+;; specific-class-id is set, this is the type that will be used to
+;; determine is the instance is really a subclass. This is used for
+;; casting objects. Also this keyword enables to test for subclassness
+;; of two classes without having an instance.
+;; eg: (is-subclass? 'adsf 'Super-Class-Name specific-class-id: 'Sub-Class-Name)
+(define (is-subclass? obj super-id #!key specefic-class-id)
+  (let ((class-id (if specefic-class-id
+                      specefic-class-id
+                      (get-class-id obj))))
+    (or (eq? class-id super-id)
+        (any-type? super-id)
+        (cond ((match-type? super-id)
+               (and (external-object? class-id)
+                    (equal? obj (match-type-value super-id))))
+              ((and-type? super-id)
+               (forall (lambda (and-super-id)
+                         (is-subclass? obj
+                                       and-super-id
+                                       specefic-class-id: class-id))
+                       (and-type-types super-id)))
+              ((or-type? super-id)
+               (exists (lambda (or-super-id)
+                         (is-subclass? obj
+                                       or-super-id
+                                       specefic-class-id: class-id))
+                       (or-type-types super-id)))
+              ((match-member-type? super-id)
+               (and (is-subclass? obj
+                                  (match-member-class super-id)
+                                  specefic-class-id: class-id)
+                    ((match-member-predicate super-id) obj)))
+              
+              ;; else regular class type
+              (else
+               (and (not (any-type? class-id))
+                    (memq super-id
+                          (class-desc-supers (table-ref rt-class-table
+                                                        class-id)))
+                    #t))))))
 
 (define (get-super-numbers type)
     (cond
-     ((or (any-type? type) (external-object? type))
+     ((any-type? type)
       0)
      ;; match types request are priotary toward any-type requests...
-     ((match-type? type)
+     ((or (match-type? type)
+          (match-member-type? type)
+          (and-type? type)
+          (or-type? type))
       1)
      (else
       (length (class-desc-supers (find-class? type))))))
 
 (define (get-supers type)
-  (if (or (any-type? type) (external-object? type) (match-type? type))
+  (if (or (any-type? type) (match-type? type) (and-type? type) (or-type? type))
       any-type
       (class-desc-supers (find-class? type))))
 
@@ -597,27 +688,39 @@
                 (method-comparator <)
                 method-lst))
 
-(define (equivalent-types? instance-types param-types)
-    (if (pair? instance-types)
-        (and (if (and (pair? (car param-types))
-                      (not (external-object? (car param-types))))
-                 ;; a list of param types is used to implement the
-                 ;; call-next-method functionnality by providing the list
-                 ;; of the super classes here...
-                 (let ((instance-type (car instance-types)))
-                   (exists (lambda (x) (is-subclass? x instance-type))
-                           (car param-types)))
-                 (is-subclass? (car param-types) (car instance-types)))
-             (equivalent-types? (cdr instance-types) (cdr param-types)))
-        #t))
+;; Actual types is specified because the actual params might be type
+;; casted
+(define (equivalent-types? instance-types actual-params actual-types)
+  (if (pair? instance-types)
+      (and (if (and (list? (car actual-types))
+                    (forall symbol? (car actual-params)))
+               ;; a list of param types is used to implement the
+               ;; call-next-method functionnality by providing the list
+               ;; of the super classes here...
+               (let ((instance-type (car instance-types)))
+                 (exists (lambda (x)
+                           (is-subclass? (car actual-params) instance-type
+                                         specefic-class-id: x))
+                         (car actual-types)))
+               (is-subclass? (car actual-params) 
+                             (car instance-types)
+                             specefic-class-id: (car actual-types)))
+           (equivalent-types? (cdr instance-types)
+                              (cdr actual-params)
+                              (cdr actual-types)))
+      #t))
 
 ;; Will find the "best" or most specific instance of the generic
-;; function genfun that corresponds to the actual parameter's types
-(define (find-polymorphic-instance? genfun types)
-  (let ((args-nb (length types))
+;; function genfun that corresponds to the actual parameter's types.
+;; Actual types is specified because the actual params might be type
+;; casted
+(define (find-polymorphic-instance? genfun actual-params actual-types)
+  (let ((args-nb (length actual-params))
         (sorted-instances (generic-function-sorted-instances genfun)))
-    (exists (lambda (method) (equivalent-types? (method-types method)
-                                                types))
+    (exists (lambda (method)
+              (equivalent-types? (method-types method)
+                                 actual-params
+                                 actual-types))
             (filter (lambda (i) (= (length (method-types i)) args-nb))
                     sorted-instances))))
 

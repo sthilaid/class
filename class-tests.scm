@@ -321,3 +321,23 @@
     (write (on-values 1 3))
     (write (on-values 3 2))
     'ok))
+
+(define-test test-dispatch-on-member-values "1011any233any1any1" 'ok
+  (define-generic on-values)
+  (define-method (on-values (x (or (match-value: 10) (match-value: 11))) y)
+    x)
+  (define-method (on-values x y)
+    'any2)
+  (define-method (on-values (x (or (match-member: A a 3)
+                                   (match-value: 3))))
+    3)
+  (define-method (on-values x) 'any1)
+
+  (write (on-values 10 0))
+  (write (on-values 11 0))
+  (write (on-values 12 10))
+  (write (on-values (new A 3)))
+  (write (on-values 3))
+  (write (on-values (new A 4)))
+  (write (on-values 4))
+  'ok)
