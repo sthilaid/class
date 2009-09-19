@@ -332,7 +332,7 @@
             (table-set! rt-class-table
                         ',name
                         ,(class-desc-name name))
-            ;; Generic function that are generated must come after the
+            ;; Generic funtion that are generated must come after the
             ;; descriptor was put into the runtime class table!
             ,(gen-instantiator field-indices)
             ,(gen-printfun field-indices)))))
@@ -490,6 +490,8 @@
 (define (class-desc-id desc)           (vector-ref desc 0))
 (define (class-desc-supers desc)       (vector-ref desc 1))
 (define (class-desc-indices-vect desc) (vector-ref desc 2))
+
+(define (unbound-class-slot? x) (eq? x 'unbound-class-slot))
 
 (define (make-generic-function name args)
   (vector name args (make-table test: equal?) '() #f))
@@ -663,10 +665,13 @@
       0)
      ;; match types request are priotary toward any-type requests...
      ((or (match-type? type)
-          (match-member-type? type)
-          (and-type? type)
+          (match-member-type? type))
+      1000) ; big number...
+     ((or (and-type? type)
           (or-type? type))
-      1)
+      (fold-l (lambda (acc x) (+ (get-super-numbers x) acc))
+              0
+              (cdr type))) ; <- use of cdr not clean...
      (else
       (length (class-desc-supers (find-class? type))))))
 
