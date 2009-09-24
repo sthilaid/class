@@ -1,11 +1,11 @@
 ;; File that include a test suite for the object system provided with
 ;; class.scm. The tests can be ran with (run-tests).
 
-(include "scm-lib-macro.scm")
+(include "include/scm-lib-macro.scm")
 (include "test-macro.scm")
-(include "class.scm")
-(load "scm-lib.scm")
-(load "test.scm")
+(include "include/class.scm")
+;; (load "scm-lib.scm")
+;; (load "test.scm")
 
 ;; (pp (lambda () (define-class A ()      (slot: a) (class-slot: csa))))
 (define-class A ()      (slot: a) (class-slot: csa))
