@@ -15,7 +15,7 @@ ifneq "$(PREFIX)" "."
 	mkdir -p $(PREFIX)
 endif
 
-include: $(foreach f,$(INCLUDE_FILES),$(SRC_PATH)/$(f))
+include: $(foreach f,$(INCLUDE_FILES),$(INCLUDE_PATH)/$(f))
 $(INCLUDE_PATH)/%.scm: $(SRC_PATH)/%.scm
 	mkdir -p $(INCLUDE_PATH)
 	cp $< $@
