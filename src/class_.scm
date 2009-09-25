@@ -12,8 +12,8 @@
   ;; macro exp time librairy
   (eval
    '(begin
-      (include "scm-lib-macro.scm")
-      (include "scm-lib.scm")
+      (include "include/scm-lib_.scm")
+      (load "lib/scm-lib")
       
       ;; method expansion mode
       (define mode 'iterative) ; iterative as default
