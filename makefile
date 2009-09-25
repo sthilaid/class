@@ -27,7 +27,7 @@ $(LIB_PATH)/%.o1: $(SRC_PATH)/%.scm
 
 setup-libs: setup-scm-lib
 
-$(SRC_PATH)/scm-lib.scm $(INCLUDE_PATH)/scm-lib_.scm: setup-scm-lib
+$(SRC_PATH)/scm-lib.scm $(SRC_PATH)/scm-lib_.scm: setup-scm-lib
 setup-scm-lib:
 	mkdir -p $(LIB_PATH)
 	mkdir -p $(EXTERNAL_LIBS)
