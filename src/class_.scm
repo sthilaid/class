@@ -13,7 +13,7 @@
   (eval
    '(begin
       (include "include/scm-lib_.scm")
-      (load "lib/scm-lib")
+      (load "lib/scm-lib.scm") ; to avoid mult load of the lib
       
       ;; method expansion mode
       (define mode 'iterative) ; iterative as default
