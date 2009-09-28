@@ -6,6 +6,7 @@ LIB_PATH=$(PREFIX)/lib
 EXTERNAL_LIBS=$(PREFIX)/external-libs
 
 scm-lib-PATH=git://github.com/sthilaid/scm-lib.git
+export scm-lib-PATH
 
 INCLUDE_FILES=scm-lib_.scm class.scm class_.scm 
 LIB_FILES=scm-lib.o1
