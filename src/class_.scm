@@ -49,7 +49,7 @@
               `(quote ,class)
               `(lambda (obj)
                  (equal? (,(gen-accessor-name class member) obj)
-                         ,value))))
+                         (quote ,value)))))
       (define (match-member-type? ty) (and (list? ty)
                                            (eq? (car ty) match-member)))
       (define (match-member-class ty) (cadr ty))
