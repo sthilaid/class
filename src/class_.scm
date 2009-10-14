@@ -178,10 +178,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define-macro (update! obj class field f)
-  (let ((objval (gensym 'objval)))
-   `(let ((,objval ,obj))
-      (,(gen-setter-name class field) ,objval
-       (,f (,(gen-accessor-name class field) ,objval))))))
+  (let ((objval (gensym 'objval))
+        (newval (gensym 'newval)))
+   `(let* ((,objval ,obj)
+           (,newval (,f (,(gen-accessor-name class field) ,objval))))
+      (,(gen-setter-name class field) ,objval ,newval)
+      ,newval)))
 
 (define-macro (set-fields! obj class field-val-list)
   (let ((obj-ptr (gensym 'obj)))

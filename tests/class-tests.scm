@@ -178,9 +178,9 @@
         'ok
         'no)))
 
-(define-test test-update! "" 'ok
+(define-test test-update! "2" 'ok
   (let ((obj (make-A 1)))
-    (update! obj A a (lambda (x) (+ x 1)))
+    (display (update! obj A a (lambda (x) (+ x 1))))
     (if (= (A-a obj) 2)
         'ok
         'no)))
