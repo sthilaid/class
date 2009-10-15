@@ -32,10 +32,7 @@
 
       (define any-type '*)
       (define (any-type? ty) (eq? ty any-type))
-      (define (make-external-object val) (cons val any-type))
-      (define (external-object? ty) (and (pair? ty)
-                                         (eq? (cdr ty) any-type)))
-      (define external-object-value car)
+      (define (external-object? obj) (not (instance-object? obj)))
 
       (define match-type match-value:)
       (define (make-match-type val) (list match-type val))
