@@ -349,14 +349,31 @@
     `(begin
        (define ,(gen-method-table-name name)
          (make-generic-function ',name ',args))
-       (define (,name #!key (cast #f) #!rest args)
+       (define (,name #!key (cast #f) 
+                      ;; #!optional (arg1 empty-argument)
+                      ;;            (arg2 empty-argument)
+                      ;;            (arg3 empty-argument)
+                      #!rest args)
          ;; the retrieval of types is slower then when the number of
          ;; parameters was constant. Now (map get-class-id...) is
          ;; performed at runtime.
-         (let ((types
-                (cond
-                 ((pair? cast) cast)
-                 (else (map get-class-id args)))))
+         (let* ((args-nb (length args))
+                (types
+                 (if cast
+                     cast
+                     (cond
+                      ((= args-nb 0) ;;(eq? arg1 empty-argument)
+                       '())
+                      ((= args-nb 1) ;;(eq? arg2 empty-argument)
+                       (list (get-class-id (car args))))
+                      ((= args-nb 2) ;;(eq? arg3 empty-argument)
+                       (list (get-class-id (car args))
+                             (get-class-id (cadr args))))
+                      ((= args-nb 3) ;;(not (pair? args))
+                       (list (get-class-id (car args))
+                             (get-class-id (cadr args))
+                             (get-class-id (caddr args))))
+                      (else (map get-class-id args))))))
            (cond
             ((or
               ;; Can only use fast meth instance recovery if there are
@@ -378,7 +395,17 @@
                                            (map get-supers
                                                 (current-method-types))
                                            args))))
-                    (apply (method-body method) args))))
+                    (cond
+                     ((= args-nb 0) ;;(eq? arg1 empty-argument)
+                      ((method-body method)))
+                     ((= args-nb 1) ;;(eq? arg2 empty-argument)
+                      ((method-body method) (car args)))
+                     ((= args-nb 2) ;;(eq? arg3 empty-argument) '()
+                      ((method-body method) (car args) (cadr args)))
+                     ((= args-nb 3) ;;(not (pair? args))
+                      ((method-body method)
+                       (car args) (cadr args) (caddr args)))
+                     (else (apply (method-body method) args))))))
             (else
              (error (string-append
                      "Unknown method: "
@@ -562,6 +589,9 @@
                                 (eq? (car ty) '__wrapped-type__)))
 
 
+;; used by the generic function
+(define empty-argument (gensym 'empty-arg))
+
 ;; Runtime class table
 (define rt-class-table (make-table test: eq?))
 
@@ -723,11 +753,11 @@
   (let ((args-nb (length actual-params))
         (sorted-instances (generic-function-sorted-instances genfun)))
     (exists (lambda (method)
-              (equivalent-types? (method-types method)
-                                 actual-params
-                                 actual-types))
-            (filter (lambda (i) (= (length (method-types i)) args-nb))
-                    sorted-instances))))
+              (and (= (length (method-types method)) args-nb)
+                   (equivalent-types? (method-types method)
+                                      actual-params
+                                      actual-types)))
+            sorted-instances)))
 
 ;; The call-next-method works well with single inheritance, but might
 ;; give unexpected results with multiple inheritance, as the
